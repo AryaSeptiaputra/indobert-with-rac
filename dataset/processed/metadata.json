@@ -1,0 +1,69 @@
+{
+  "source": "..\\dataset\\raw\\data_labeling.csv",
+  "random_seed": 42,
+  "counts": {
+    "raw": 14237,
+    "after_missing": 14227,
+    "after_dedup": 9412,
+    "leakage_removed": 17,
+    "final_total": 9395
+  },
+  "label_conflict": {
+    "groups": 3,
+    "rows": 32,
+    "policy": "assign_1"
+  },
+  "splits": {
+    "train": {
+      "n": 6588,
+      "L0": 5391,
+      "L1": 1197,
+      "L1_pct": 18.17
+    },
+    "val": {
+      "n": 1402,
+      "L0": 1145,
+      "L1": 257,
+      "L1_pct": 18.33
+    },
+    "test": {
+      "n": 1405,
+      "L0": 1149,
+      "L1": 256,
+      "L1_pct": 18.22
+    }
+  },
+  "class_weights": {
+    "0": 0.6110183639398998,
+    "1": 2.7518796992481205
+  },
+  "config": {
+    "dedup_key": "nfkc_exact",
+    "split_ratios": [
+      0.7,
+      0.15,
+      0.15
+    ],
+    "stratified": true,
+    "max_length": 128,
+    "model_name": "indobenchmark/indobert-base-p2",
+    "special_tokens": [
+      "[URL]",
+      "[MENTION]",
+      "[NUM]"
+    ],
+    "placeholders": {
+      "url": "[URL]",
+      "mention": "[MENTION]",
+      "number": "standalone \\b\\d+\\b -> [NUM]"
+    },
+    "kept_as_is": [
+      "short_comments",
+      "non_indonesian",
+      "length_outliers",
+      "emoji"
+    ],
+    "lowercase_manual": false
+  },
+  "notes": "Index FAISS RM-c HANYA dari train set. Model wajib resize_token_embeddings(len(tokenizer))."
+}

@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.egg-info/
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Dataset mentah & hasil preprocessing
+# alasan: regenerable dari raw + script preprocessing, dan berisi data personal (username YouTube)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Checkpoint model & index FAISS — besar, hasil training di Vast.ai
+checkpoints/
+*.bin
+*.safetensors
+*.pt
+*.faiss
+*.index
+
+# Log training
+runs/
+logs/
+wandb/
+
+# Kredensial (kalau nanti nyimpen API key Vast.ai / GitHub token)
+.env
+*.pem
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Claude Stuff
+./claude
+CLAUDE.MD
