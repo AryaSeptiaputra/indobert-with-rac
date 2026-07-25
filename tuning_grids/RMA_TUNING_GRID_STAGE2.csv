@@ -1,0 +1,3 @@
+lr,epochs,batch,warmup_ratio,weight_decay,micro_batch,catatan
+2e-05,5,32,0.0,0.01,32,"Coordinate descent Tahap 2 pada sel pemenang Tahap 1 (run #13: lr=2e-05/epochs=5/batch=32, val F1-macro 0,9822). warmup_ratio=0.0 (vs 0.1 baseline) -- uji apakah warmup memang perlu, sekaligus menutup risiko sisa interaksi lr x warmup."
+2e-05,5,32,0.1,0.1,32,"Coordinate descent Tahap 2 pada sel pemenang Tahap 1 (run #13). weight_decay=0.1 (vs 0.01 baseline) -- regularisasi lebih kuat; relevan karena run #13 sendiri menunjukkan overfit_signal=True (puncak di epoch 4/5)."

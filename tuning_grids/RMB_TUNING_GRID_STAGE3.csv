@@ -1,0 +1,7 @@
+head_arch,hidden_dim,epochs,lr,dropout,weight_decay,batch,catatan
+mlp,1024,10,0.001,0.0,0.01,32,"Tahap 3 RM-b (sel pemenang Tahap 2: hidden_dim=1024, lr=1e-3, epochs=10, val F1-macro 0,9650). dropout=0,0 (vs default 0,1) -- uji apakah head sekecil ini justru dirugikan oleh regularisasi standar BERT."
+mlp,1024,10,0.001,0.3,0.01,32,"Tahap 3 RM-b, dropout=0,3 (vs default 0,1) -- regularisasi lebih kuat; walau overfit_signal Tahap 2 di sel ini sebetulnya plateau bukan penurunan performa, tetap layak dicek."
+mlp,1024,10,0.001,0.1,0.0,32,"Tahap 3 RM-b, weight_decay=0,0 (vs default 0,01) -- AdamW decoupled weight decay (Loshchilov & Hutter) -- cek apakah regularisasi ini bahkan berpengaruh pada head sekecil ini."
+mlp,1024,10,0.001,0.1,0.1,32,"Tahap 3 RM-b, weight_decay=0,1 (vs default 0,01) -- regularisasi 10x lebih kuat, sama semangatnya dengan Tahap 2 RM-a."
+mlp,1024,10,0.001,0.1,0.01,16,"Tahap 3 RM-b, batch=16 (vs default 32) -- RM-a membuktikan batch=32 unggul dari 16; dicek ulang di RM-b karena training di atas fitur beku (tanpa grad-accum) punya dinamika update berbeda."
+mlp,1024,10,0.001,0.1,0.01,64,"Tahap 3 RM-b, batch=64 (vs default 32) -- batch lebih besar lagi, apakah tren 'batch besar menang' dari RM-a berlanjut atau ada titik baliknya."

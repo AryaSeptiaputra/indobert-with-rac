@@ -109,3 +109,27 @@ Dikunci di `src/dataset.py`:
 ## Catatan untuk RM-c (RAC)
 
 Index FAISS **hanya dibangun dari train set** (`dataset/splits/train.csv`). Membangunnya dari data yang memuat val/test akan menyebabkan retrieval menemukan tetangga nyaris identik → `logit_retrieval` tinggi palsu dan keunggulan RM-c menjadi artefak (bukan temuan valid). Prinsip anti-leakage ini non-negotiable.
+
+### Hyperparameter final RM-c (setelah tuning di validation)
+
+Fusi probabilitas: `p_final = (1-α)·softmax(head) + α·p_retr`; retrieval = cosine (embedding di-L2-normalisasi), bobot tetangga = `max(cos, 0)`.
+
+| Parameter | Nilai final | Catatan |
+|-----------|-------------|---------|
+| **α (alpha)** | **0.5** | dari grid `[0.0..1.0]`, dipilih by val F1-macro (default awal 0.3) |
+| **k (neighbors)** | **3** | dari grid `[1,3,5,10,20,50]` (default awal 5) |
+| weighting | `similarity` | vs `uniform` |
+
+Ditentukan di `notebooks/03c_rmc_rac.ipynb` (val F1-macro 0.9577). Modul: `src/rac.py`.
+
+### Ringkasan hasil ketiga skenario (test set: 1.149 non-judi / 256 judi)
+
+| Model | F1-macro | F1 judi | Precision judi | FP | Trainable params | Waktu latih |
+|-------|----------|---------|----------------|-----|------------------|-------------|
+| RM-a (full FT) | 0,9651 | 0,9428 | 0,9522 | 12 | 109.485.314 | 285,8 s |
+| RM-b (frozen+head) | 0,9006 | 0,8408 | 0,7756 | 68 | 1.538 | 23,9 s |
+| **RM-c (RAC, k=3, α=0,5)** | **0,9500** | **0,9183** | **0,9147** | 22 | **0** (pakai ulang RM-b) | **0** |
+
+RM-c menutup celah F1-macro RM-b→RM-a dari 6,45 pp menjadi **1,51 pp** (≤3 pp) tanpa training tambahan — memenuhi **3/3 kriteria sukses**. Perbaikan utama pada precision judi (0,776→0,915; FP 68→22).
+
+> **Caveat efisiensi (Bab 4):** latency & peak GPU memory antar-notebook **belum apple-to-apple** (sesi/GPU Colab berbeda; RM-a mengukur memori saat training vs RM-b saat ekstraksi). Untuk angka final, ukur latency & memori inferensi ketiga model dalam **satu sesi GPU yang sama**. Yang sudah valid: trainable params & waktu training.

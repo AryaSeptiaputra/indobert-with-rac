@@ -180,10 +180,14 @@ Strategi ringan (RM-b atau RM-c) dianggap **kompetitif** terhadap full fine-tuni
 | Pengumpulan & pelabelan data | ✅ Selesai |
 | EDA | ✅ Selesai |
 | Preprocessing | ✅ Selesai |
-| RM-a (full fine-tuning) | ⬜ Belum |
-| RM-b (frozen encoder) | ⬜ Belum |
-| RM-c (frozen + RAC) | ⬜ Belum |
+| RM-a (full fine-tuning) | ✅ Selesai (baseline) |
+| RM-b (frozen encoder) | ✅ Selesai (baseline) |
+| RM-c (frozen + RAC) | ✅ Selesai (baseline) |
+| Sistem tuning (UI Streamlit → Vast.ai) | 🟡 Siap, belum dijalankan |
+| Tuning final + benchmark satu-sesi | ⬜ Belum (jalankan di Vast.ai) |
 | Analisis hasil & penulisan | ⬜ Belum |
+
+> Detail status & langkah berikutnya: lihat [`PROGRESS.md`](PROGRESS.md) dan [`VAST_GUIDE.md`](VAST_GUIDE.md).
 
 ---
 

@@ -16,8 +16,10 @@ import numpy as np
 import torch
 from sklearn.metrics import (
     accuracy_score,
+    average_precision_score,
     confusion_matrix,
     f1_score,
+    precision_recall_curve,
     precision_recall_fscore_support,
 )
 
@@ -73,6 +75,37 @@ def plot_confusion_matrix(y_true, y_pred, path, title="Confusion Matrix"):
     fig.savefig(path, bbox_inches="tight", dpi=120)
     plt.close(fig)
     return cm
+
+
+def plot_pr_curve(y_true, y_score, path, title="Precision-Recall (kelas judi)"):
+    """PR curve kelas positif (1=judi) dari skor probabilitas -> simpan PNG di `path`.
+
+    Relevan untuk data imbalance (4,5:1): lebih informatif dari confusion matrix
+    tunggal untuk melihat trade-off precision/recall pada kelas minoritas.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    y_true = np.asarray(y_true)
+    y_score = np.asarray(y_score)
+    prec, rec, _ = precision_recall_curve(y_true, y_score)
+    ap = average_precision_score(y_true, y_score)
+    baseline = float(y_true.mean()) if len(y_true) else 0.0
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+
+    fig, ax = plt.subplots(figsize=(4.5, 4))
+    ax.plot(rec, prec, color="tab:purple")
+    ax.axhline(baseline, color="gray", linestyle="--", linewidth=1,
+              label=f"baseline ({baseline:.3f})")
+    ax.set_xlabel("Recall"); ax.set_ylabel("Precision")
+    ax.set_title(f"{title}\nAP={ap:.4f}")
+    ax.set_xlim(0, 1.02); ax.set_ylim(0, 1.02)
+    ax.legend(loc="lower left")
+    fig.tight_layout()
+    fig.savefig(path, bbox_inches="tight", dpi=120)
+    plt.close(fig)
+    return ap
 
 
 def count_parameters(model) -> dict:

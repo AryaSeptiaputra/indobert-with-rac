@@ -105,7 +105,7 @@ def extract_features(encoder, dataloader, device, use_amp: bool = True):
         kwargs = {"input_ids": input_ids, "attention_mask": attn}
         if "token_type_ids" in batch:
             kwargs["token_type_ids"] = batch["token_type_ids"].to(device)
-        with torch.cuda.amp.autocast(enabled=amp_enabled):
+        with torch.amp.autocast("cuda", enabled=amp_enabled):
             out = encoder(**kwargs)
         pooled = mean_pool(out.last_hidden_state, attn).float().cpu().numpy()
         feats.append(pooled)
@@ -131,3 +131,35 @@ class FrozenHead(nn.Module):
 
     def forward(self, features: torch.Tensor) -> torch.Tensor:
         return self.classifier(self.dropout(features))
+
+
+class MLPHead(nn.Module):
+    """Classification head RM-b varian MLP: Linear->ReLU->Dropout->Linear.
+
+    Untuk menguji apakah kapasitas tambahan (hidden layer) menutup gap RM-b.
+    Trainable params ~ H*hidden + hidden*num_labels (masih << RM-a).
+    """
+
+    def __init__(self, hidden_size: int = 768, hidden_dim: int = 256,
+                 num_labels: int = 2, dropout: float = 0.1):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(hidden_size, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, num_labels),
+        )
+
+    def forward(self, features: torch.Tensor) -> torch.Tensor:
+        return self.net(features)
+
+
+def build_head(arch: str = "linear", hidden_size: int = 768, num_labels: int = 2,
+               dropout: float = 0.1, hidden_dim: int = 256):
+    """Factory head RM-b: 'linear' -> FrozenHead, 'mlp' -> MLPHead."""
+    if arch == "linear":
+        return FrozenHead(hidden_size=hidden_size, num_labels=num_labels, dropout=dropout)
+    if arch == "mlp":
+        return MLPHead(hidden_size=hidden_size, hidden_dim=hidden_dim,
+                       num_labels=num_labels, dropout=dropout)
+    raise ValueError(f"arch tak dikenal: {arch}")

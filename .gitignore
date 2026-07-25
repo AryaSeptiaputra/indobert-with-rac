@@ -33,6 +33,14 @@ runs/
 logs/
 wandb/
 
+# Hasil tuning Vast.ai — regenerable dari re-run kampanye, backup lewat report_bundle.zip
+# (tab Hasil app.py); menumpuk terus tiap sesi, tak perlu ikut versi kontrol.
+results/vast/
+
+# Cache embedding beku RM-b/RM-c — regenerable dari model+data (28MB biner, sama alasan
+# dengan checkpoints/*.pt di atas).
+results/features/
+
 # Kredensial (kalau nanti nyimpen API key Vast.ai / GitHub token)
 .env
 *.pem

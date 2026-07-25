@@ -1,0 +1,2 @@
+alpha,k,weighting,catatan
+0.2,5,uniform,"Tahap 2 RM-c -- cek weighting=uniform di sel yang direkomendasikan (alpha=0,2 k=5, val F1-macro 0,969903 dgn weighting=similarity -- dipilih atas juara mekanis k=1/0,969995 karena k=1 secara statistik seri (delta 0,0092pp) tapi kurvanya tidak stabil/rentan 1 tetangga). Hasil similarity di sel ini sudah ada (run #15 Tahap 1) -- tinggal bandingkan apakah uniform lebih baik/sama/lebih buruk."

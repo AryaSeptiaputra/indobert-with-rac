@@ -1,0 +1,3 @@
+head_arch,hidden_dim,epochs,lr,dropout,weight_decay,batch,catatan
+mlp,768,5,0.0002,0.1,0.01,32,"Perluasan Tahap 1 RM-b -- hidden_dim=512 menang di tepi rentang yang diuji (128/256/512) dan kenaikan 256->512 (+0,87pp) lebih besar dari 128->256 (+0,32pp), belum melandai. Uji apakah tren masih naik di kapasitas lebih besar sebelum mengunci hidden_dim untuk Tahap 2."
+mlp,1024,5,0.0002,0.1,0.01,32,"Perluasan Tahap 1 RM-b -- probe kapasitas lebih besar lagi dari 768, mencari titik di mana tren kenaikan val_f1_macro mulai melandai/overfit sebelum mengunci hidden_dim untuk Tahap 2."

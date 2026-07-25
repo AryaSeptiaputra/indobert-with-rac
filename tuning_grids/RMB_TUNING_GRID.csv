@@ -1,0 +1,5 @@
+head_arch,hidden_dim,epochs,lr,dropout,weight_decay,batch,catatan
+linear,,5,0.0002,0.1,0.01,32,"Tahap 1 RM-b, baseline kanonik RMB_DEFAULT (head_arch=linear) -- kontrol wajib re-tuning dari nol, titik acuan seluruh grid."
+mlp,128,5,0.0002,0.1,0.01,32,"Tahap 1 RM-b, head_arch=mlp hidden_dim=128 -- kapasitas kecil, cukupkah sedikit non-linearitas tanpa menambah param berarti?"
+mlp,256,5,0.0002,0.1,0.01,32,"Tahap 1 RM-b, head_arch=mlp hidden_dim=256 -- kapasitas default RMB_DEFAULT, juga yang dipakai RM-c nanti bila MLP menang."
+mlp,512,5,0.0002,0.1,0.01,32,"Tahap 1 RM-b, head_arch=mlp hidden_dim=512 -- kapasitas besar, mendekati batas wajar sebelum jumlah param tumbuh signifikan."
