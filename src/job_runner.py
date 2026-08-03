@@ -122,22 +122,34 @@ def build_ctx(cfg, device):
             "max_length": cfg.get("max_length", 128), "num_workers": 0}
 
 
+def model_slug(model_name: str) -> str:
+    return model_name.replace("/", "__")
+
+
+def features_dir(ctx, out: Path) -> Path:
+    return out / "features" / model_slug(ctx["model_name"])
+
+
 def ensure_features(ctx, out: Path):
-    fdir = out / "features"; fdir.mkdir(parents=True, exist_ok=True)
+    fdir = features_dir(ctx, out); fdir.mkdir(parents=True, exist_ok=True)
     if not all((fdir / f"{s}_emb.npy").exists() for s in ["train", "val", "test"]):
-        print("[features] ekstraksi fitur beku (encoder p2, sekali saja)...", flush=True)
+        print(f"[features] ekstraksi fitur beku (encoder {ctx['model_name']}, sekali saja)...", flush=True)
         from torch.utils.data import DataLoader
         enc = M.build_encoder(ctx["tokenizer"], model_name=ctx["model_name"]).to(ctx["device"])
         t0 = time.perf_counter()
         if ctx["device"].type == "cuda":
             torch.cuda.reset_peak_memory_stats()
+        hidden_dim = None
         for s, df in [("train", ctx["train_df"]), ("val", ctx["val_df"]), ("test", ctx["test_df"])]:
             ds = GamblingCommentDataset(df["text_clean"], df["label"], tokenizer=ctx["tokenizer"],
                                         max_length=ctx["max_length"])
             emb, lab = M.extract_features(enc, DataLoader(ds, batch_size=32), ctx["device"], use_amp=True)
             np.save(fdir / f"{s}_emb.npy", emb); np.save(fdir / f"{s}_label.npy", lab)
+            hidden_dim = emb.shape[1]
             print(f"[features] {s}: {emb.shape}", flush=True)
-        json.dump({"extract_time_s": round(time.perf_counter() - t0, 1),
+        json.dump({"model_name": ctx["model_name"], "hidden_dim": hidden_dim,
+                   "extracted_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                   "extract_time_s": round(time.perf_counter() - t0, 1),
                    "extract_peak_gpu_mem_mb": round(E.peak_gpu_mem_mb(), 1)},
                   open(fdir / "extract_meta.json", "w"), indent=2)
         del enc
@@ -153,6 +165,9 @@ def load_best_head(out: Path, device):
     head = M.build_head(c["head_arch"], hidden_size=ck["hidden_size"], dropout=c["dropout"],
                         hidden_dim=c.get("hidden_dim", 256))
     head.load_state_dict(ck["head_state"])
+    # Checkpoint lama (pra fitur ini) tidak punya key ini -- None berarti "tak diketahui",
+    # bukan berarti pasti cocok.
+    c["_encoder_model_name"] = ck.get("model_name")
     return head, c
 
 
@@ -167,7 +182,8 @@ def _run_one_rma(cfg_input, note, eval_test, ctx, out, logger, batch_id=""):
     rid = logger.next_id()
     print(f"[rma] RUN #{rid} config={cfg}", flush=True)
     vm, hist, extra = T.train_eval_rma(cfg, ctx)
-    row = {"scenario": "rma", "batch_id": batch_id, **cfg, "micro_batch_eff": extra["micro_batch"],
+    row = {"scenario": "rma", "batch_id": batch_id, "model_name": ctx["model_name"], **cfg,
+           "micro_batch_eff": extra["micro_batch"],
            "grad_accum": extra["grad_accum"],
            "val_f1_macro": round(vm["f1_macro"], 6), "val_acc": round(vm["accuracy"], 6),
            "val_precision_macro": round(vm["precision_macro"], 6),
@@ -224,8 +240,8 @@ def _run_one_rmb(cfg_input, note, eval_test, ctx, out, logger, batch_id="", feat
     rid = logger.next_id()
     print(f"[rmb] RUN #{rid} config={cfg}", flush=True)
     vm, hist, extra = T.train_eval_rmb(cfg, feats, ctx["weight"], ctx["device"], return_test=eval_test)
-    ex_meta = read_json(out / "features" / "extract_meta.json")
-    row = {"scenario": "rmb", "batch_id": batch_id, **cfg,
+    ex_meta = read_json(features_dir(ctx, out) / "extract_meta.json")
+    row = {"scenario": "rmb", "batch_id": batch_id, "model_name": ctx["model_name"], **cfg,
            "val_f1_macro": round(vm["f1_macro"], 6), "val_acc": round(vm["accuracy"], 6),
            "val_precision_macro": round(vm["precision_macro"], 6),
            "val_recall_macro": round(vm["recall_macro"], 6),
@@ -255,10 +271,12 @@ def _run_one_rmb(cfg_input, note, eval_test, ctx, out, logger, batch_id="", feat
                                 "train_time_s": row["train_time_s"],
                                 "trainable_params": extra["trainable_params"],
                                 "peak_mem_mb": extra["peak_mem_mb"],
-                                "infer_latency_ms": extra["infer_latency_ms"]}):
+                                "infer_latency_ms": extra["infer_latency_ms"],
+                                "model_name": ctx["model_name"]}):
         (out / "checkpoints").mkdir(parents=True, exist_ok=True)
         torch.save({"head_state": extra["best_state"], "config": cfg, "run_id": rid,
-                    "hidden_size": extra["hidden_size"], "val_f1_macro": vm["f1_macro"]},
+                    "hidden_size": extra["hidden_size"], "val_f1_macro": vm["f1_macro"],
+                    "model_name": ctx["model_name"]},
                    out / "checkpoints" / "rmb_best.pt")
         try:
             head = M.build_head(cfg["head_arch"], hidden_size=extra["hidden_size"], dropout=cfg["dropout"],
@@ -294,9 +312,17 @@ def _run_one_rmc(cfg_input, note, eval_test, ctx, out, logger, batch_id="", feat
     """
     cfg = {**T.RMC_DEFAULT, **cfg_input}
     rid = logger.next_id()
+    head_model = hcfg.get("_encoder_model_name")
+    if head_model is not None and head_model != ctx["model_name"]:
+        raise ValueError(
+            f"Encoder mismatch: head RM-b dilatih dengan '{head_model}' tapi job ini pakai "
+            f"'{ctx['model_name']}'. RM-c mewarisi encoder dari head RM-b -- jalankan RM-b dulu "
+            f"dengan model_name yang sama, atau ganti model_name job ini."
+        )
     print(f"[rmc] RUN #{rid} config={cfg} | head RM-b: {hcfg}", flush=True)
     vm, extra = T.eval_rmc(cfg, feats, head, ctx["device"], split="val")
-    row = {"scenario": "rmc", "batch_id": batch_id, **cfg, "head_arch_rmb": hcfg.get("head_arch"),
+    row = {"scenario": "rmc", "batch_id": batch_id, "model_name": ctx["model_name"], **cfg,
+           "head_arch_rmb": hcfg.get("head_arch"),
            "val_f1_macro": round(vm["f1_macro"], 6), "val_acc": round(vm["accuracy"], 6),
            "val_precision_macro": round(vm["precision_macro"], 6),
            "val_recall_macro": round(vm["recall_macro"], 6),

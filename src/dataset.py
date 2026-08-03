@@ -16,24 +16,46 @@ from __future__ import annotations
 
 import torch
 from torch.utils.data import Dataset
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, BertTokenizer
 
 from preprocessing import SPECIAL_TOKENS
 
 MODEL_NAME = "indobenchmark/indobert-base-p2"
 MAX_LENGTH = 128
 
+# Ambang vocab yang masuk akal -- semua checkpoint indobenchmark (base maupun lite)
+# punya vocab WordPiece >20rb. Dipakai untuk mendeteksi kegagalan senyap AutoTokenizer
+# di bawah.
+_MIN_SANE_VOCAB = 1000
+
 
 def load_tokenizer(model_name: str = MODEL_NAME):
-    """Muat tokenizer p2 dan daftarkan placeholder sebagai special token.
+    """Muat tokenizer dan daftarkan placeholder sebagai special token.
 
     Returns:
-        tokenizer: AutoTokenizer dengan [URL]/[MENTION]/[NUM] terdaftar.
+        tokenizer: tokenizer dengan [URL]/[MENTION]/[NUM] terdaftar.
 
     Catatan: panggil `model.resize_token_embeddings(len(tokenizer))` pada model
     setelah tokenizer ini dipakai (ukuran vocab bertambah 3).
+
+    Catatan checkpoint `indobert-lite-*`: repo Hub-nya berarsitektur ALBERT
+    (`config.json` -> `AlbertModel`), sehingga `AutoTokenizer` salah menebak kelas
+    `AlbertTokenizer` (berbasis SentencePiece) -- padahal repo ini HANYA menyediakan
+    `vocab.txt` WordPiece (sama seperti `indobert-base-p2`), bukan file `.model`
+    SentencePiece. Alih-alih error, `AlbertTokenizer` diam-diam jatuh ke vocab
+    minimal 5-token (semua kata jadi `[UNK]`) -- bug senyap yang berbahaya untuk
+    training. Deteksi ini lewat ukuran vocab dan fallback eksplisit ke
+    `BertTokenizer` (WordPiece), yang terbukti berhasil memuat vocab penuh.
     """
     tokenizer = AutoTokenizer.from_pretrained(model_name)
+    if len(tokenizer) < _MIN_SANE_VOCAB:
+        print(f"[load_tokenizer] AutoTokenizer utk '{model_name}' menghasilkan vocab "
+              f"mencurigakan kecil ({len(tokenizer)}) -- fallback ke BertTokenizer (WordPiece).")
+        tokenizer = BertTokenizer.from_pretrained(model_name)
+        if len(tokenizer) < _MIN_SANE_VOCAB:
+            raise ValueError(f"Tokenizer '{model_name}' tetap punya vocab kecil "
+                             f"({len(tokenizer)}) walau sudah fallback ke BertTokenizer -- "
+                             f"periksa manual repo Hub-nya.")
     tokenizer.add_special_tokens({"additional_special_tokens": SPECIAL_TOKENS})
     return tokenizer
 

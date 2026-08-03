@@ -36,6 +36,9 @@ wandb/
 # Hasil tuning Vast.ai — regenerable dari re-run kampanye, backup lewat report_bundle.zip
 # (tab Hasil app.py); menumpuk terus tiap sesi, tak perlu ikut versi kontrol.
 results/vast/
+# out_dir eksperimen ad-hoc (mis. results/vast_rmc_cheap_head/, results/vast_candidate2/)
+# -- sama alasannya: regenerable, biner besar, bukan hasil resmi Bab 4.
+results/vast_*/
 
 # Cache embedding beku RM-b/RM-c — regenerable dari model+data (28MB biner, sama alasan
 # dengan checkpoints/*.pt di atas).

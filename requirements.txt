@@ -8,6 +8,10 @@
 torch==2.1.0
 transformers==4.38.0
 datasets==2.18.0
+sentencepiece              # transformers butuh ini utk *mengenali* kelas AlbertTokenizer,
+                           # walau load_tokenizer() akhirnya fallback ke BertTokenizer utk
+                           # indobert-lite-* (repo Hub-nya cuma punya vocab.txt WordPiece,
+                           # bukan .model SentencePiece asli -- lihat src/dataset.py)
 faiss-cpu==1.7.4          # ganti faiss-gpu==1.7.2 bila ada GPU (Vast.ai)
 scikit-learn==1.4.0
 pandas==2.2.0

@@ -149,7 +149,7 @@ Tuning on Vast.ai writes to `results/vast/`:
 
 `run_local_training.py` writes the same kinds of artifacts to `results/local/`.
 
-**Current state of `results/`:** all previous model results were deliberately deleted for a clean-slate retune. What remains is only the 5 EDA figures in `results/figures/`, the cached 768-dim embeddings in `results/features/`, and an empty `results/vast/`. Do not expect `results/metrics/`, `results/tuning/`, `results/local/`, or `results/checkpoints/` to exist.
+**Current state of `results/`:** the full Vast.ai tuning campaign + final benchmark are complete (2026-07-25) — see `PROGRESS.md` for the authoritative up-to-date status. `results/vast/` is fully populated: `best.json`, `runs_{rma,rmb,rmc}.csv` (124 runs total), `history/` (per-epoch val curves), `checkpoints/` (`rma_best.pt`, `rmb_best.pt`, `rmc_best.pt`), `figures/` (~70 PNGs), `metrics/` (`final_comparison.csv`, `inference_benchmark.csv`, `success_criteria.csv`, grid pivots), `tuning_summary.json`, `hardware.json`. `results/local/` (from `run_local_training.py`) is still empty — not re-run since the clean-slate. `results/figures/` still holds only the 5 EDA figures (that folder was never for model results).
 
 ## Evaluation Metrics
 
@@ -174,10 +174,16 @@ Tuning on Vast.ai writes to `results/vast/`:
 
 ## Current Status
 
-Data collection, labeling, EDA, and preprocessing are **complete**. Baseline RM-a/RM-b/RM-c runs were produced earlier, but **all model results were deliberately deleted** (clean slate) in order to re-tune from scratch on Vast.ai — so any previously reported numbers are historical and no longer in the repo.
+Data collection, labeling, EDA, preprocessing, and **all tuning are complete** (last updated 2026-07-25 — see `PROGRESS.md` for the authoritative status doc). The full hybrid-design tuning campaigns ran on Vast.ai: RM-a 26 runs, RM-b 31 runs, RM-c 67 runs, plus the Final-tab single-session (RTX 3090) test benchmark. Final test-set results:
 
-Next steps, in order:
-1. **RM-a tuning — not yet started.** Run the 26-config hybrid design above on Vast.ai (start with one SMOKE run, then run #1 baseline).
-2. **RM-b tuning** — frozen encoder; decide `head_arch` early, then `lr`, `epochs`, `hidden_dim`, `dropout`, `weight_decay`.
-3. **RM-c** — re-derive α and k after RM-b is final (RM-c automatically reuses the best RM-b head).
-4. **Final tab** — run once for the single-session efficiency benchmark, then download `report_bundle.zip` and **DESTROY** the instance (not Stop).
+| Model | Config | F1-macro | Trainable params | Train time | Inference latency |
+|-------|--------|----------|--------------------|------------|--------------------|
+| RM-a (full FT) | lr=2e-5, epochs=5, batch=32, warmup=0.1, wd=0.01 | 0.9607 | 109,485,314 | 81.1s | 9.40ms |
+| RM-b (frozen + MLP head) | hidden_dim=1024, lr=1e-3, epochs=10, dropout=0.1, wd=0.0, batch=32 | 0.9486 | 789,506 (0.72%) | 11.65s | 9.08ms |
+| RM-c (RAC) | alpha=0.2, k=5, weighting=similarity (head = RM-b above) | 0.9497 | 0 | 0.0s | 10.96ms |
+
+RM-b and RM-c both pass 3/3 success criteria. A known limitation: inference latency for RM-b/RM-c is nearly identical to RM-a, since the full 110M-parameter encoder still runs a forward pass at inference in all three scenarios — efficiency gains are in trainable params and training time, not prediction speed.
+
+Remaining work:
+1. **Thesis Chapter 4 (Bab 4) write-up** — the main remaining task; use `PROGRESS.md` and `results/vast/` as the source of truth.
+2. **(Optional) further RM-c exploration** — e.g. re-checking α/k, or a lighter IndoBERT encoder variant (see `PROGRESS.md`) to attack the inference-latency plateau above. Any such exploration must use a separate `out_dir` (never `results/vast/`, which holds the locked-in Chapter 4 numbers).

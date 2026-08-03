@@ -143,6 +143,17 @@ st.session_state.setdefault("out_dir", "results/vast")
 st.session_state["out_dir"] = st.sidebar.text_input("Folder output", st.session_state["out_dir"],
                                                     key="sb_out")
 smoke = st.sidebar.checkbox("Mode SMOKE (subset kecil, uji cepat)", value=False, key="sb_smoke")
+MODEL_CHOICES = ["indobenchmark/indobert-base-p2", "indobenchmark/indobert-lite-base-p2"]
+st.session_state.setdefault("model_name", MODEL_CHOICES[0])
+st.session_state["model_name"] = st.sidebar.selectbox(
+    "Base encoder", MODEL_CHOICES,
+    index=MODEL_CHOICES.index(st.session_state["model_name"]), key="sb_model_name",
+    help="Berlaku untuk seluruh job (RM-a/b/c). indobert-lite-base-p2 = varian ALBERT "
+         "(param jauh lebih sedikit, hidden_size sama 768) — eksplorasi efisiensi encoder. "
+         "Pakai `out_dir` TERPISAH bila ganti dari default, jangan timpa hasil final di results/vast/.")
+if st.session_state["model_name"] != MODEL_CHOICES[0] and st.session_state["out_dir"] == "results/vast":
+    st.sidebar.warning("⚠️ Encoder non-default tapi `out_dir` masih `results/vast` (hasil final "
+                        "terkunci). Ganti folder output, mis. `results/vast_lite`.")
 st.sidebar.caption("Alur: set HP → Run → analisis → ubah → ulang. 1 klik = 1 konfigurasi.")
 
 prog = read_json(out_dir() / "progress.json")
@@ -222,9 +233,10 @@ with t_st:
         m = ROOT / "dataset" / "processed" / "metadata.json"
         if m.exists():
             st.write("class weights:", read_json(m).get("class_weights"))
-        f = out_dir() / "features"
+        f = out_dir() / "features" / st.session_state["model_name"].replace("/", "__")
         ok = all((f / f"{s}_emb.npy").exists() for s in ["train", "val", "test"])
-        st.write(f"{'✅' if ok else '⚪'} fitur beku (otomatis saat RM-b pertama)")
+        st.write(f"{'✅' if ok else '⚪'} fitur beku untuk `{st.session_state['model_name']}` "
+                f"(otomatis saat RM-b pertama)")
     st.subheader("Log run (100 baris terakhir)")
     lg = out_dir() / "job.log"
     st.code("".join(open(lg, encoding="utf-8", errors="replace").readlines()[-100:])
@@ -238,10 +250,10 @@ RUN_COLS = {
     "rma": ["run_id", "batch_id", "lr", "epochs", "batch", "warmup_ratio", "weight_decay",
             "val_f1_macro", "val_f1_judi", "is_tie_with_best", "overfit_signal",
             "best_epoch", "train_time_s", "catatan"],
-    "rmb": ["run_id", "batch_id", "head_arch", "hidden_dim", "epochs", "lr", "dropout", "weight_decay",
-            "val_f1_macro", "val_f1_judi", "is_tie_with_best", "overfit_signal",
+    "rmb": ["run_id", "batch_id", "model_name", "head_arch", "hidden_dim", "epochs", "lr", "dropout",
+            "weight_decay", "val_f1_macro", "val_f1_judi", "is_tie_with_best", "overfit_signal",
             "best_epoch", "train_time_s", "peak_mem_mb", "infer_latency_ms", "catatan"],
-    "rmc": ["run_id", "batch_id", "alpha", "k", "weighting", "val_f1_macro", "val_f1_judi",
+    "rmc": ["run_id", "batch_id", "model_name", "alpha", "k", "weighting", "val_f1_macro", "val_f1_judi",
             "is_tie_with_best", "eval_time_s", "catatan"],
 }
 
@@ -329,8 +341,14 @@ with t_tune:
         st.caption("Memakai head RM-b TERBAIK + FAISS (index hanya dari train). "
                    "α=0 → murni head RM-b; α=1 → murni retrieval. Yu+2023.")
         if "rmb" in best:
+            rmb_model = best["rmb"].get("model_name", "(tidak diketahui — checkpoint lama)")
             st.info(f"Head RM-b yang dipakai: run #{best['rmb']['run_id']} — "
                     f"`{json.dumps(best['rmb']['config'])}` (val F1 {best['rmb']['val_f1_macro']:.4f})")
+            st.caption(f"Encoder head ini: `{rmb_model}`. RM-c mewarisi encoder ini — "
+                       f"pastikan sama dengan pilihan **Base encoder** di sidebar sebelum Run.")
+            if rmb_model != st.session_state["model_name"] and rmb_model != "(tidak diketahui — checkpoint lama)":
+                st.warning(f"⚠️ Base encoder sidebar (`{st.session_state['model_name']}`) beda dengan "
+                          f"encoder head RM-b (`{rmb_model}`) — job akan gagal (encoder mismatch).")
         else:
             st.warning("Belum ada run RM-b. Jalankan RM-b dulu.")
         c1, c2, c3 = st.columns(3)
@@ -349,6 +367,7 @@ with t_tune:
     if st.button(f"▶️ Jalankan {scenario.upper()} (1 konfigurasi)", type="primary",
                  disabled=alive, key="btn_run"):
         start_job({"phase": scenario, "out_dir": st.session_state["out_dir"], "smoke": smoke,
+                   "model_name": st.session_state["model_name"],
                    "note": note, "eval_test": eval_test, "config": config})
 
     st.divider()
@@ -426,7 +445,8 @@ with t_tune:
                                                     "eval_test": bool(r.get("eval_test", False))})
                         bid = f"{scenario}_grid_{time.strftime('%Y%m%d_%H%M%S')}"
                         start_job({"phase": scenario, "out_dir": st.session_state["out_dir"],
-                                   "smoke": smoke, "batch_id": bid, "configs": configs_payload})
+                                   "smoke": smoke, "model_name": st.session_state["model_name"],
+                                   "batch_id": bid, "configs": configs_payload})
 
         else:  # Tempel/unggah tabel CSV
             st.caption("Kolom = nama field HP (+ opsional `catatan`, `eval_test`). Kolom yang tidak "
@@ -472,7 +492,8 @@ with t_tune:
                             configs_payload.append({"config": cfg, "note": note_v, "eval_test": et_v})
                         bid = f"{scenario}_csv_{time.strftime('%Y%m%d_%H%M%S')}"
                         start_job({"phase": scenario, "out_dir": st.session_state["out_dir"],
-                                   "smoke": smoke, "batch_id": bid, "configs": configs_payload})
+                                   "smoke": smoke, "model_name": st.session_state["model_name"],
+                                   "batch_id": bid, "configs": configs_payload})
 
     if st.button("🔄 Regenerate figur & ringkasan grid", key=f"btn_regen_{scenario}"):
         import reporting
@@ -527,7 +548,8 @@ with t_f:
         st.warning(f"Belum lengkap: {', '.join(x.upper() for x in missing)}. Jalankan dulu.")
     if st.button("▶️ Jalankan Final/Benchmark", type="primary", disabled=alive or bool(missing),
                  key="btn_f"):
-        start_job({"phase": "final", "out_dir": st.session_state["out_dir"], "smoke": smoke})
+        start_job({"phase": "final", "out_dir": st.session_state["out_dir"], "smoke": smoke,
+                   "model_name": st.session_state["model_name"]})
     for f, cap in [("metrics/final_comparison.csv", "Perbandingan final (test)"),
                    ("metrics/inference_benchmark.csv", "Benchmark inferensi (satu sesi)"),
                    ("metrics/success_criteria.csv", "Kriteria sukses")]:

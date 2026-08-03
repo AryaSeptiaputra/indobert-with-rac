@@ -110,26 +110,28 @@ Dikunci di `src/dataset.py`:
 
 Index FAISS **hanya dibangun dari train set** (`dataset/splits/train.csv`). Membangunnya dari data yang memuat val/test akan menyebabkan retrieval menemukan tetangga nyaris identik → `logit_retrieval` tinggi palsu dan keunggulan RM-c menjadi artefak (bukan temuan valid). Prinsip anti-leakage ini non-negotiable.
 
-### Hyperparameter final RM-c (setelah tuning di validation)
+### Hyperparameter final RM-c (setelah tuning di validation, Vast.ai)
 
 Fusi probabilitas: `p_final = (1-α)·softmax(head) + α·p_retr`; retrieval = cosine (embedding di-L2-normalisasi), bobot tetangga = `max(cos, 0)`.
 
 | Parameter | Nilai final | Catatan |
 |-----------|-------------|---------|
-| **α (alpha)** | **0.5** | dari grid `[0.0..1.0]`, dipilih by val F1-macro (default awal 0.3) |
-| **k (neighbors)** | **3** | dari grid `[1,3,5,10,20,50]` (default awal 5) |
-| weighting | `similarity` | vs `uniform` |
+| **α (alpha)** | **0.2** | dari grid α×k (66 run), dipilih by val F1-macro (default awal 0.3) |
+| **k (neighbors)** | **5** | sama seperti default awal |
+| weighting | `similarity` | vs `uniform` (dicek terpisah, similarity menang) |
 
-Ditentukan di `notebooks/03c_rmc_rac.ipynb` (val F1-macro 0.9577). Modul: `src/rac.py`.
+Ditentukan lewat kampanye tuning `app.py`/`src/job_runner.py` di Vast.ai (67 run total: 66 grid α×k + 1 cek weighting), val F1-macro 0.9699. Modul: `src/rac.py`. Angka lama di bawah (α=0.5, k=3, dari `notebooks/03c_rmc_rac.ipynb`/Colab) adalah **baseline historis pra-tuning** — dipertahankan untuk narasi metodologi, bukan angka final.
 
-### Ringkasan hasil ketiga skenario (test set: 1.149 non-judi / 256 judi)
+### Ringkasan hasil ketiga skenario — angka final (test set: 1.149 non-judi / 256 judi, satu sesi RTX 3090, 2026-07-25)
 
-| Model | F1-macro | F1 judi | Precision judi | FP | Trainable params | Waktu latih |
-|-------|----------|---------|----------------|-----|------------------|-------------|
-| RM-a (full FT) | 0,9651 | 0,9428 | 0,9522 | 12 | 109.485.314 | 285,8 s |
-| RM-b (frozen+head) | 0,9006 | 0,8408 | 0,7756 | 68 | 1.538 | 23,9 s |
-| **RM-c (RAC, k=3, α=0,5)** | **0,9500** | **0,9183** | **0,9147** | 22 | **0** (pakai ulang RM-b) | **0** |
+| Model | Config final | F1-macro | F1 judi | Precision judi | Recall judi | FP (≈) | Trainable params | Waktu latih | Latency inferensi |
+|-------|--------------|----------|---------|----------------|-------------|--------|-------------------|-------------|--------------------|
+| RM-a (full FT) | lr=2e-5, epochs=5, batch=32 | 0,9607 | 0,9357 | 0,9339 | 0,9375 | 17 | 109.485.314 | 81,1 s | 9,40 ms |
+| RM-b (frozen + MLP head) | hidden_dim=1024, lr=1e-3, epochs=10 | 0,9486 | 0,9159 | 0,9176 | 0,9141 | 21 | 789.506 (0,72%) | 11,65 s | 9,08 ms |
+| **RM-c (RAC, k=5, α=0,2)** | weighting=similarity (head = RM-b di atas) | **0,9497** | **0,9176** | **0,9213** | 0,9141 | 20 | **0** (pakai ulang RM-b) | **0,0 s** | 10,96 ms |
 
-RM-c menutup celah F1-macro RM-b→RM-a dari 6,45 pp menjadi **1,51 pp** (≤3 pp) tanpa training tambahan — memenuhi **3/3 kriteria sukses**. Perbaikan utama pada precision judi (0,776→0,915; FP 68→22).
+Sumber: `results/vast/metrics/final_comparison.csv` + `success_criteria.csv`. **RM-b dan RM-c lolos 3/3 kriteria sukses** (RM-b: gap F1 1,21pp / reduksi param 99,28% / reduksi waktu latih 85,64%; RM-c: gap F1 1,10pp / reduksi param 100% / reduksi waktu latih 100%). RAC memberi perbaikan kecil tapi konsisten di atas RM-b murni (+0,11pp F1-macro), seluruhnya dari perbaikan precision (mengurangi ±1 false positive dari 1.405 sampel test) — dibaca sebagai bonus tanpa risiko, bukan pendorong utama argumen kompetitif (belum diuji signifikansi statistik formal, satu seed/split).
 
-> **Caveat efisiensi (Bab 4):** latency & peak GPU memory antar-notebook **belum apple-to-apple** (sesi/GPU Colab berbeda; RM-a mengukur memori saat training vs RM-b saat ekstraksi). Untuk angka final, ukur latency & memori inferensi ketiga model dalam **satu sesi GPU yang sama**. Yang sudah valid: trainable params & waktu training.
+**Catatan latency:** latency inferensi RM-b/RM-c **hampir sama** dengan RM-a (bahkan RM-c sedikit lebih lambat) — encoder BERT-base 110M-parameter tetap dijalankan penuh saat inferensi di ketiganya, jadi efisiensi RM-b/RM-c ada di waktu latih & jumlah trainable params, bukan kecepatan prediksi. Ini motivasi eksplorasi lanjutan memakai varian IndoBERT yang lebih ringan sebagai encoder (lihat `PROGRESS.md`).
+
+> **Caveat efisiensi (Bab 4) — terpenuhi.** Syarat "satu hardware/satu sesi" untuk angka efisiensi (waktu latih, latency, peak memory) sudah dipenuhi lewat tab Final `app.py`: ketiga model diukur pada RTX 3090 yang sama dalam satu sesi (2026-07-25), lihat `results/vast/metrics/inference_benchmark.csv`. Angka F1 boleh dibandingkan lintas-hardware (hardware-independent); angka efisiensi TIDAK boleh dicampur dengan hasil Colab/lokal lama.

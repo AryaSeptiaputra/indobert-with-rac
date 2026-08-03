@@ -38,6 +38,46 @@ dan (opsional) tuning RM-c lanjutan bila ingin eksplorasi lebih jauh.
 - RM-c: RAC memberi perbaikan **kecil tapi konsisten arahnya** di atas RM-b murni (+0,11pp F1-macro test) — seluruhnya berasal dari perbaikan precision (mengurangi 1 false positive dari 1.405 sampel test), recall tak berubah sama sekali. Signifikansi statistik formal belum diuji (satu seed/split) — baca sebagai bonus tanpa risiko, bukan pendorong utama argumen kompetitif.
 - **Latency inferensi RM-b/RM-c HAMPIR SAMA dengan RM-a** (bahkan RM-c sedikit lebih lambat) — efisiensi RM-b/RM-c ada di parameter & waktu **latih**, bukan kecepatan prediksi (forward pass encoder BERT 110M tetap penuh dijalankan di ketiganya saat inferensi).
 
+## Eksplorasi encoder ringan (IndoBERT-lite) untuk RM-b/RM-c — infrastruktur siap, hasil awal
+
+Motivasi: latency inferensi RM-b/RM-c hampir tidak membaik dibanding RM-a (lihat temuan kunci di
+atas) karena encoder BERT-base 110M tetap dijalankan penuh saat inferensi. Untuk menyerang ini,
+ditambahkan dukungan **ganti encoder** RM-b/RM-c ke varian yang lebih ringan:
+
+- **Infrastruktur** (siap dipakai): `app.py` sidebar punya selectbox "Base encoder"
+  (`indobert-base-p2` default vs `indobert-lite-base-p2`); `src/job_runner.py` menamai cache fitur
+  per-model (`features/<model_slug>/`, `extract_meta.json` kini mencatat `model_name`+`hidden_dim`);
+  `rmb_best.pt` mencatat `model_name` asalnya; RM-c menolak (raise error) jika `model_name` job
+  beda dari encoder head RM-b yang dipakai (cegah kontaminasi silang). Kolom `model_name` kini ada
+  di `runs_{rma,rmb,rmc}.csv`. Semua perubahan aditif & backward-compatible (checkpoint lama tanpa
+  key ini tetap bisa dimuat, hanya validasi mismatch di-skip dengan aman).
+- **Bug penting yang ditemukan & diperbaiki** (`src/dataset.py::load_tokenizer`): repo Hub
+  `indobenchmark/indobert-lite-*` berarsitektur ALBERT tapi **hanya menyediakan vocab.txt
+  WordPiece**, bukan file `.model` SentencePiece. `AutoTokenizer` salah menebak kelas
+  (`AlbertTokenizer`, butuh SentencePiece) dan **diam-diam** jatuh ke vocab minimal 5-token (semua
+  kata jadi `[UNK]`) — bukan error, sehingga bisa lolos tanpa disadari dan mencemari seluruh
+  training/evaluasi. Diperbaiki dengan deteksi otomatis (`len(tokenizer) < 1000` → fallback ke
+  `BertTokenizer`) + `sentencepiece` ditambahkan ke `requirements.txt` (tetap dibutuhkan agar
+  `transformers` bisa mengenali kelas `AlbertTokenizer` sebelum fallback berjalan).
+- **Validasi SMOKE (lokal, RTX 3050 Laptop, subset kecil, BUKAN angka final):** tokenizer (dengan
+  fix di atas), `resize_token_embeddings`+seeding token khusus, ekstraksi fitur, training head RM-b,
+  RAC RM-c, dan guard mismatch — **semua lolos** memakai `indobenchmark/indobert-lite-base-p2`.
+- **Temuan awal (perbandingan latency satu-sesi/satu-GPU, encoder saja, sample tunggal):**
+  encoder lite (ALBERT, 11,68 juta parameter) **TIDAK mempercepat forward pass** dibanding
+  base-p2 (109,48 juta parameter) — 21,78 ms vs 21,41 ms (lite sedikit LEBIH LAMBAT). Yang turun
+  drastis justru **peak GPU memory** (59,6 MB vs 433,4 MB, ~86% lebih kecil). Ini konsisten dengan
+  arsitektur ALBERT (Lan et al., 2019): parameter berkurang lewat *cross-layer weight sharing*,
+  bukan lewat pengurangan jumlah layer atau ukuran hidden — jumlah komputasi (FLOPs) per forward
+  pass nyaris sama dengan BERT-base, jadi latency tidak ikut turun proporsional dengan parameter.
+  **Implikasi:** `indobert-lite-base-p2` kemungkinan BUKAN jawaban untuk masalah latency RM-b/RM-c;
+  ia menambah argumen efisiensi *memori*, bukan *kecepatan*. Untuk benar-benar mengejar latency,
+  perlu varian dengan **lebih sedikit layer transformer** (mis. model ter-distilasi), bukan
+  ALBERT-style parameter sharing.
+- **Belum dilakukan** (di luar lingkup validasi ini, perlu keputusan berikutnya): kampanye tuning
+  sungguhan dengan encoder lite (grid RM-b baru + turunan RM-c) di `out_dir` terpisah (mis.
+  `results/vast_lite/`) di Vast.ai untuk angka F1/efisiensi yang valid Bab 4 — SMOKE run lokal di
+  atas sudah dibersihkan (bukan artefak permanen).
+
 ## Sistem tuning UI — cara kerja
 
 Dibangun untuk dijalankan di **Vast.ai** (GPU sewa) dengan alur **human-in-the-loop**, plus mode **Batch** (tambahan, aditif — single-config tetap ada) untuk menjalankan banyak konfigurasi sekaligus dari grid nilai (Cartesian) atau tabel CSV siap-pakai:
