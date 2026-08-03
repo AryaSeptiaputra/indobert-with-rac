@@ -44,6 +44,14 @@ results/vast_*/
 # dengan checkpoints/*.pt di atas).
 results/features/
 
+# results_c2/ — hasil unduhan Vast.ai (kandidat #2), diekstrak di root repo. Checkpoint
+# .pt sudah ke-ignore lewat pola global di atas; baris ini menambah embedding .npy dan
+# figur .png (regenerable, biner besar) supaya hanya CSV/JSON kecil yang ikut versi
+# kontrol (lihat results_c2/final_comparison_all_candidates.csv).
+results_c2/**/features/
+results_c2/**/figures/
+results_c2/figures/
+
 # Kredensial (kalau nanti nyimpen API key Vast.ai / GitHub token)
 .env
 *.pem

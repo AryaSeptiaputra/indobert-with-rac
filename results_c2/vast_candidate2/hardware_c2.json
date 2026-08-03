@@ -1,0 +1,9 @@
+{
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "cuda_available": true,
+  "cuda_version": "13.0",
+  "torch": "2.12.0+cu130",
+  "vram_total_mb": 24126,
+  "transformers": "5.14.1",
+  "nvidia_smi": "NVIDIA GeForce RTX 3090, 595.71.05, 24576 MiB"
+}

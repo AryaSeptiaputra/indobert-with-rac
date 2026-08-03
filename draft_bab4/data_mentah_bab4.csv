@@ -1,0 +1,185 @@
+bab,tabel_referensi,deskripsi,nilai,satuan,sumber_file
+4.1,Tabel 4.1,GPU,NVIDIA GeForce RTX 3090,-,results/vast/hardware.json
+4.1,Tabel 4.1,VRAM,24,GB,results/vast/hardware.json
+4.1,Tabel 4.1,Versi CUDA,13.0,-,results/vast/hardware.json
+4.1,Tabel 4.1,Versi PyTorch,2.12.0+cu130,-,results/vast/hardware.json
+4.1,Tabel 4.1,Versi Transformers,5.14.1,-,results/vast/hardware.json
+4.1,Tabel 4.1,Penyedia GPU,Vast.ai (on-demand),-,results/vast/hardware.json
+4.1,Tabel 4.2,Jumlah baris - Train,6588,baris,dataset/processed/metadata.json
+4.1,Tabel 4.2,Kelas 0 - Train,5391,baris,dataset/processed/metadata.json
+4.1,Tabel 4.2,Kelas 1 - Train,1197,baris,dataset/processed/metadata.json
+4.1,Tabel 4.2,Persentase kelas 1 - Train,18.17,%,dataset/processed/metadata.json
+4.1,Tabel 4.2,Jumlah baris - Validation,1402,baris,dataset/processed/metadata.json
+4.1,Tabel 4.2,Kelas 0 - Validation,1145,baris,dataset/processed/metadata.json
+4.1,Tabel 4.2,Kelas 1 - Validation,257,baris,dataset/processed/metadata.json
+4.1,Tabel 4.2,Persentase kelas 1 - Validation,18.33,%,dataset/processed/metadata.json
+4.1,Tabel 4.2,Jumlah baris - Test,1405,baris,dataset/processed/metadata.json
+4.1,Tabel 4.2,Kelas 0 - Test,1149,baris,dataset/processed/metadata.json
+4.1,Tabel 4.2,Kelas 1 - Test,256,baris,dataset/processed/metadata.json
+4.1,Tabel 4.2,Persentase kelas 1 - Test,18.22,%,dataset/processed/metadata.json
+4.1,Tabel 4.2,Jumlah baris - Total,9395,baris,dataset/processed/metadata.json
+4.1,Tabel 4.2,Kelas 0 - Total,7685,baris,dataset/processed/metadata.json
+4.1,Tabel 4.2,Kelas 1 - Total,1710,baris,dataset/processed/metadata.json
+4.1,Tabel 4.2,Persentase kelas 1 - Total,18.20,%,dataset/processed/metadata.json
+4.1,Tabel 4.2,Rasio ketidakseimbangan kelas,4.5,":1",dataset/processed/metadata.json
+4.1,Tabel 4.3,Class weight kelas 0,0.6110,-,dataset/processed/metadata.json
+4.1,Tabel 4.3,Class weight kelas 1,2.7519,-,dataset/processed/metadata.json
+4.1,teks,Panjang token maksimum,128,token,dataset/processed/metadata.json
+4.1,teks,Cakupan max_length terhadap panjang komentar,>=99.9,%,dataset/processed/metadata.json
+4.2,Tabel 4.4,Data awal (mentah),14237,baris,dataset/processed/metadata.json
+4.2,Tabel 4.4,Setelah pembuangan baris kosong,14227,baris,dataset/processed/metadata.json
+4.2,Tabel 4.4,Perubahan - pembuangan baris kosong,-10,baris,dataset/processed/metadata.json
+4.2,Tabel 4.4,Setelah deduplikasi (NFKC-exact),9412,baris,dataset/processed/metadata.json
+4.2,Tabel 4.4,Perubahan - deduplikasi,-4815,baris,dataset/processed/metadata.json
+4.2,Tabel 4.4,Setelah guard anti-leakage,9395,baris,dataset/processed/metadata.json
+4.2,Tabel 4.4,Perubahan - guard anti-leakage,-17,baris,dataset/processed/metadata.json
+4.2,teks,Proporsi reduksi tahap deduplikasi,34,% (approx),dataset/processed/metadata.json
+4.2,Tabel 4.5,Tingkat UNK sebelum NFKC (kelas judi),90.5,%,EDA_REPORT_BAGIAN2.md
+4.2,Tabel 4.5,Tingkat UNK setelah NFKC (kelas judi),53.6,%,EDA_REPORT_BAGIAN2.md
+4.2,teks,Jumlah kelompok duplikat berkonflik label,3,kelompok,dataset/processed/metadata.json
+4.2,teks,Jumlah baris berkonflik label,32,baris,dataset/processed/metadata.json
+4.3.1,teks,Total konfigurasi RM-a dieksplorasi,26,konfigurasi,tuning_grids/RMA_TUNING_GRID.md
+4.3.1,teks,Titik grid kombinatorial RM-a,24,konfigurasi,tuning_grids/RMA_TUNING_GRID.md
+4.3.1,teks,Titik coordinate descent RM-a,2,konfigurasi,tuning_grids/RMA_TUNING_GRID.md
+4.3.1,Tabel 4.6,Atas #1 - lr,2e-5,-,results/vast/runs_rma.csv
+4.3.1,Tabel 4.6,Atas #1 - epochs,5,-,results/vast/runs_rma.csv
+4.3.1,Tabel 4.6,Atas #1 - batch,32,-,results/vast/runs_rma.csv
+4.3.1,Tabel 4.6,Atas #1 - weight_decay,0.01,-,results/vast/runs_rma.csv
+4.3.1,Tabel 4.6,Atas #1 - val_f1_macro,0.98216,-,results/vast/runs_rma.csv
+4.3.1,Tabel 4.6,Atas #2 - weight_decay,0.10,-,results/vast/runs_rma.csv
+4.3.1,Tabel 4.6,Atas #2 - val_f1_macro,0.98216,-,results/vast/runs_rma.csv
+4.3.1,Tabel 4.6,Bawah #2 - lr,1e-5,-,results/vast/runs_rma.csv
+4.3.1,Tabel 4.6,Bawah #2 - epochs,3,-,results/vast/runs_rma.csv
+4.3.1,Tabel 4.6,Bawah #2 - batch,16,-,results/vast/runs_rma.csv
+4.3.1,Tabel 4.6,Bawah #2 - val_f1_macro,0.96808,-,results/vast/runs_rma.csv
+4.3.1,Tabel 4.6,Bawah #1 - lr,5e-5,-,results/vast/runs_rma.csv
+4.3.1,Tabel 4.6,Bawah #1 - epochs,3,-,results/vast/runs_rma.csv
+4.3.1,Tabel 4.6,Bawah #1 - batch,16,-,results/vast/runs_rma.csv
+4.3.1,Tabel 4.6,Bawah #1 - val_f1_macro,0.96705,-,results/vast/runs_rma.csv
+4.3.1,teks,Rentang val_f1_macro seluruh grid RM-a (selisih terbaik-terburuk),1.5,pp (approx),results/vast/runs_rma.csv
+4.3.2,teks,Total konfigurasi RM-b dieksplorasi (distinct),27,konfigurasi,tuning_grids/RMB_TUNING_GRID.md
+4.3.2,teks,Titik tahap arsitektur RM-b,4,konfigurasi,tuning_grids/RMB_TUNING_GRID.md
+4.3.2,teks,Titik perluasan tahap arsitektur RM-b,2,konfigurasi,tuning_grids/RMB_TUNING_GRID.md
+4.3.2,teks,Titik grid lr x epochs RM-b,15,konfigurasi,tuning_grids/RMB_TUNING_GRID.md
+4.3.2,teks,Titik coordinate descent RM-b,6,konfigurasi,tuning_grids/RMB_TUNING_GRID.md
+4.3.2,teks,Jumlah baris mentah runs_rmb.csv (termasuk duplikat tidak sengaja),31,baris,results/vast/runs_rmb.csv
+4.3.2,Tabel 4.7,Linear - trainable params,1538,parameter,results/vast/runs_rmb.csv
+4.3.2,Tabel 4.7,Linear - val_f1_macro,0.9125,-,results/vast/runs_rmb.csv
+4.3.2,Tabel 4.7,MLP hidden_dim=128 - trainable params,98690,parameter,results/vast/runs_rmb.csv
+4.3.2,Tabel 4.7,MLP hidden_dim=128 - val_f1_macro,0.9368,-,results/vast/runs_rmb.csv
+4.3.2,Tabel 4.7,MLP hidden_dim=128 - efisiensi marjinal,2.51,pp F1 / 100rb param,results/vast/runs_rmb.csv
+4.3.2,Tabel 4.7,MLP hidden_dim=256 - trainable params,197378,parameter,results/vast/runs_rmb.csv
+4.3.2,Tabel 4.7,MLP hidden_dim=256 - val_f1_macro,0.9400,-,results/vast/runs_rmb.csv
+4.3.2,Tabel 4.7,MLP hidden_dim=256 - efisiensi marjinal,0.32,pp F1 / 100rb param,results/vast/runs_rmb.csv
+4.3.2,Tabel 4.7,MLP hidden_dim=512 - trainable params,394754,parameter,results/vast/runs_rmb.csv
+4.3.2,Tabel 4.7,MLP hidden_dim=512 - val_f1_macro,0.9487,-,results/vast/runs_rmb.csv
+4.3.2,Tabel 4.7,MLP hidden_dim=512 - efisiensi marjinal,0.44,pp F1 / 100rb param,results/vast/runs_rmb.csv
+4.3.2,Tabel 4.7,MLP hidden_dim=1024 - trainable params,789506,parameter,results/vast/runs_rmb.csv
+4.3.2,Tabel 4.7,MLP hidden_dim=1024 - val_f1_macro (tahap arsitektur),0.9543,-,results/vast/runs_rmb.csv
+4.3.2,Tabel 4.7,MLP hidden_dim=1024 - efisiensi marjinal (rentang),"0.12-0.16",pp F1 / 100rb param,results/vast/runs_rmb.csv
+4.3.2,teks,Konfigurasi final RM-b - lr,1e-3,-,results/vast/runs_rmb.csv
+4.3.2,teks,Konfigurasi final RM-b - epochs,10,-,results/vast/runs_rmb.csv
+4.3.2,teks,Konfigurasi final RM-b - dropout,0.1,-,results/vast/runs_rmb.csv
+4.3.2,teks,Konfigurasi final RM-b - weight_decay,0.0,-,results/vast/runs_rmb.csv
+4.3.2,teks,Konfigurasi final RM-b - batch,32,-,results/vast/runs_rmb.csv
+4.3.2,Tabel 4.8,Atas #1 - val_f1_macro (MLP/1024 wd=0.0),0.96530,-,results/vast/runs_rmb.csv
+4.3.2,Tabel 4.8,Atas #2 - val_f1_macro (MLP/1024 wd=0.01),0.96498,-,results/vast/runs_rmb.csv
+4.3.2,Tabel 4.8,Bawah #1/#2 - val_f1_macro (linear),0.91251,-,results/vast/runs_rmb.csv
+4.3.3,teks,Titik grid alpha,11,titik,tuning_grids/RMC_TUNING_GRID.md
+4.3.3,teks,Titik grid k,6,titik,tuning_grids/RMC_TUNING_GRID.md
+4.3.3,teks,Total konfigurasi per kondisi head (66 grid + 1 cek weighting),67,konfigurasi,tuning_grids/RMC_TUNING_GRID.md
+4.3.3,teks,Head performa-terbaik - trainable params,789506,parameter,results/vast/runs_rmb.csv
+4.3.3,teks,Head paling ringan - trainable params,1538,parameter,results/vast/runs_rmb.csv
+4.3.3,teks,Rasio param head performa-terbaik vs paling ringan,513,x,results/vast/runs_rmb.csv
+4.3.3,teks,Grid head performa-terbaik - pemenang mekanis alpha,0.2,-,results/vast/runs_rmc.csv
+4.3.3,teks,Grid head performa-terbaik - pemenang mekanis k,1,-,results/vast/runs_rmc.csv
+4.3.3,teks,Grid head performa-terbaik - pemenang mekanis val_f1_macro,0.96999,-,results/vast/runs_rmc.csv
+4.3.3,teks,Grid head performa-terbaik - config final alpha,0.2,-,results/vast/runs_rmc.csv
+4.3.3,teks,Grid head performa-terbaik - config final k,5,-,results/vast/runs_rmc.csv
+4.3.3,teks,Grid head performa-terbaik - config final val_f1_macro,0.96990,-,results/vast/runs_rmc.csv
+4.3.3,teks,Ambang seri (tie threshold),0.15,pp,src/tuning.py (TIE_THRESHOLD_PP)
+4.3.3,Tabel (2 teratas+terbawah head performa-terbaik),Atas #1 - alpha=0.2 k=1,0.96999,val_f1_macro,results/vast/runs_rmc.csv
+4.3.3,Tabel (2 teratas+terbawah head performa-terbaik),Atas #2 - alpha=0.2 k=5,0.96990,val_f1_macro,results/vast/runs_rmc.csv
+4.3.3,Tabel (2 teratas+terbawah head performa-terbaik),Bawah #2 - alpha=0.9 k=50,0.92191,val_f1_macro,results/vast/runs_rmc.csv
+4.3.3,Tabel (2 teratas+terbawah head performa-terbaik),Bawah #1 - alpha=1.0 k=50,0.90752,val_f1_macro,results/vast/runs_rmc.csv
+4.3.3,teks,Grid head paling ringan - config final alpha,0.5,-,results/vast_rmc_cheap_head/runs_rmc.csv
+4.3.3,teks,Grid head paling ringan - config final k,3,-,results/vast_rmc_cheap_head/runs_rmc.csv
+4.3.3,teks,Grid head paling ringan - config final val_f1_macro,0.95760,-,results/vast_rmc_cheap_head/runs_rmc.csv
+4.3.3,Tabel (2 teratas+terbawah head paling ringan),Atas #1 - alpha=0.5 k=3,0.95760,val_f1_macro,results/vast_rmc_cheap_head/runs_rmc.csv
+4.3.3,Tabel (2 teratas+terbawah head paling ringan),Atas #2 - alpha=0.4 k=5,0.95712,val_f1_macro,results/vast_rmc_cheap_head/runs_rmc.csv
+4.3.3,Tabel (2 teratas+terbawah head paling ringan),Bawah #2 - alpha=0.0 k=1,0.91251,val_f1_macro,results/vast_rmc_cheap_head/runs_rmc.csv
+4.3.3,Tabel (2 teratas+terbawah head paling ringan),Bawah #1 - alpha=1.0 k=50,0.90752,val_f1_macro,results/vast_rmc_cheap_head/runs_rmc.csv
+4.3.3,Tabel perbandingan kontribusi RAC,Head performa-terbaik - head murni (alpha=0) val_f1_macro,0.9653,-,results/vast/runs_rmb.csv
+4.3.3,Tabel perbandingan kontribusi RAC,Head performa-terbaik - RM-c val_f1_macro,0.9699,-,results/vast/runs_rmc.csv
+4.3.3,Tabel perbandingan kontribusi RAC,Head performa-terbaik - delta val,0.46,pp,results/vast/runs_rmc.csv
+4.3.3,Tabel perbandingan kontribusi RAC,Head performa-terbaik - test_f1_macro,0.9497,-,results/vast/metrics/final_comparison.csv
+4.3.3,Tabel perbandingan kontribusi RAC,Head paling ringan - head murni (alpha=0) val_f1_macro,0.9125,-,results/vast_rmc_cheap_head/runs_rmb.csv
+4.3.3,Tabel perbandingan kontribusi RAC,Head paling ringan - RM-c val_f1_macro,0.9576,-,results/vast_rmc_cheap_head/runs_rmc.csv
+4.3.3,Tabel perbandingan kontribusi RAC,Head paling ringan - delta val,4.51,pp,results/vast_rmc_cheap_head/runs_rmc.csv
+4.3.3,Tabel perbandingan kontribusi RAC,Head paling ringan - test_f1_macro,0.9513,-,results/vast_rmc_cheap_head/runs_rmc.csv (run#67)
+4.4,teks,Jumlah baris test set,1405,baris,dataset/processed/metadata.json
+4.4,teks,Test set - kelas non-judi,1149,baris,dataset/processed/metadata.json
+4.4,teks,Test set - kelas judi,256,baris,dataset/processed/metadata.json
+4.4,Tabel 4.9,RM-a - test_f1_macro,0.9607,-,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.9,RM-a - test_accuracy,0.9765,-,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.9,RM-a - test_f1_judi,0.9357,-,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.9,RM-a - test_precision_judi,0.9339,-,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.9,RM-a - test_recall_judi,0.9375,-,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.9,RM-b - test_f1_macro,0.9486,-,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.9,RM-b - test_accuracy,0.9694,-,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.9,RM-b - test_f1_judi,0.9159,-,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.9,RM-b - test_precision_judi,0.9176,-,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.9,RM-b - test_recall_judi,0.9141,-,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.9,RM-c - test_f1_macro,0.9497,-,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.9,RM-c - test_accuracy,0.9701,-,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.9,RM-c - test_f1_judi,0.9176,-,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.9,RM-c - test_precision_judi,0.9213,-,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.9,RM-c - test_recall_judi,0.9141,-,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.10,RM-a - val_f1_macro,0.9822,-,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.10,RM-a - selisih val ke test,-2.15,pp,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.10,RM-b - val_f1_macro,0.9653,-,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.10,RM-b - selisih val ke test,-1.67,pp,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.10,RM-c - val_f1_macro,0.9699,-,results/vast/metrics/final_comparison.csv
+4.4,Tabel 4.10,RM-c - selisih val ke test,-2.02,pp,results/vast/metrics/final_comparison.csv
+4.5,Tabel 4.11,RM-a - trainable params,109485314,parameter,results/vast/metrics/final_comparison.csv
+4.5,Tabel 4.11,RM-a - waktu latih,81.1,detik,results/vast/metrics/final_comparison.csv
+4.5,Tabel 4.11,RM-a - latency inferensi,9.40,ms,results/vast/metrics/inference_benchmark.csv
+4.5,Tabel 4.11,RM-a - peak memory inferensi,1473.6,MB,results/vast/metrics/inference_benchmark.csv
+4.5,Tabel 4.11,RM-b - trainable params,789506,parameter,results/vast/metrics/final_comparison.csv
+4.5,Tabel 4.11,RM-b - reduksi params vs RM-a,99.28,%,results/vast/metrics/success_criteria.csv
+4.5,Tabel 4.11,RM-b - waktu latih,11.65,detik,results/vast/metrics/final_comparison.csv
+4.5,Tabel 4.11,RM-b - reduksi waktu vs RM-a,85.64,%,results/vast/metrics/success_criteria.csv
+4.5,Tabel 4.11,RM-b - latency inferensi,9.08,ms,results/vast/metrics/inference_benchmark.csv
+4.5,Tabel 4.11,RM-b - peak memory inferensi,1273.9,MB,results/vast/metrics/inference_benchmark.csv
+4.5,Tabel 4.11,RM-c - trainable params,0,parameter,results/vast/metrics/final_comparison.csv
+4.5,Tabel 4.11,RM-c - reduksi params vs RM-a,100,%,results/vast/metrics/success_criteria.csv
+4.5,Tabel 4.11,RM-c - waktu latih,0.0,detik,results/vast/metrics/final_comparison.csv
+4.5,Tabel 4.11,RM-c - reduksi waktu vs RM-a,100,%,results/vast/metrics/success_criteria.csv
+4.5,Tabel 4.11,RM-c - latency inferensi,10.96,ms,results/vast/metrics/inference_benchmark.csv
+4.5,Tabel 4.11,RM-c - peak memory inferensi,1273.9,MB,results/vast/metrics/inference_benchmark.csv
+4.5,teks,Selisih latency RM-b vs RM-a,-0.32,ms (lebih cepat),results/vast/metrics/inference_benchmark.csv
+4.5,teks,Selisih latency RM-c vs RM-a,0.56,ms (lebih lambat),results/vast/metrics/inference_benchmark.csv
+4.5,teks,Jumlah layer transformer encoder,12,layer,indobenchmark/indobert-base-p2 config
+4.6,Tabel 4.12,RM-b - gap F1-macro test,1.21,pp,results/vast/metrics/success_criteria.csv
+4.6,Tabel 4.12,RM-b - reduksi trainable parameters,99.28,%,results/vast/metrics/success_criteria.csv
+4.6,Tabel 4.12,RM-b - reduksi waktu latih,85.64,%,results/vast/metrics/success_criteria.csv
+4.6,Tabel 4.12,RM-b - kriteria terpenuhi,3/3,-,results/vast/metrics/success_criteria.csv
+4.6,Tabel 4.12,RM-c - gap F1-macro test,1.10,pp,results/vast/metrics/success_criteria.csv
+4.6,Tabel 4.12,RM-c - reduksi trainable parameters,100,%,results/vast/metrics/success_criteria.csv
+4.6,Tabel 4.12,RM-c - reduksi waktu latih,100,%,results/vast/metrics/success_criteria.csv
+4.6,Tabel 4.12,RM-c - kriteria terpenuhi,3/3,-,results/vast/metrics/success_criteria.csv
+4.6,teks,Ambang kriteria - gap F1-macro maksimum,3,pp,CLAUDE.md (success criteria)
+4.6,teks,Ambang kriteria - reduksi parameter minimum,90,%,CLAUDE.md (success criteria)
+4.6,teks,Ambang kriteria - reduksi waktu latih minimum,50,%,CLAUDE.md (success criteria)
+4.6,teks,Kriteria minimal terpenuhi agar kompetitif,2/3,-,CLAUDE.md (success criteria)
+4.7,Tabel 4.13,RM-b vs RM-a - biaya performa,-1.21,pp,results/vast/metrics/success_criteria.csv
+4.7,Tabel 4.13,RM-b vs RM-a - penghematan trainable parameters,99.28,%,results/vast/metrics/success_criteria.csv
+4.7,Tabel 4.13,RM-b vs RM-a - penghematan waktu latih,85.64,%,results/vast/metrics/success_criteria.csv
+4.7,Tabel 4.13,RM-c vs RM-a - biaya performa,-1.10,pp,results/vast/metrics/success_criteria.csv
+4.7,Tabel 4.13,RM-c vs RM-a - penghematan trainable parameters,100,%,results/vast/metrics/success_criteria.csv
+4.7,Tabel 4.13,RM-c vs RM-a - penghematan waktu latih,100,%,results/vast/metrics/success_criteria.csv
+4.7,teks,RM-c vs RM-b - selisih test F1-macro,0.11,pp,results/vast/metrics/final_comparison.csv
+4.7,teks,Ambang seri (tie threshold) yang dipakai sepanjang tuning,0.15,pp,src/tuning.py (TIE_THRESHOLD_PP)
+4.7,teks,Kontribusi RAC pada head paling ringan (val),4.51,pp,results/vast_rmc_cheap_head/runs_rmc.csv
+4.8,teks,Selisih MLP vs linear RM-b (val),5.28,pp,results/vast/runs_rmb.csv
+4.8,teks,Selisih RAC pada head paling ringan (val),4.51,pp,results/vast_rmc_cheap_head/runs_rmc.csv
