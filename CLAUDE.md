@@ -78,18 +78,28 @@ dataset/raw/data_labeling.csv
 - `modeling.py` — model/head factories: `build_finetune_model` (RM-a), `build_encoder` (frozen, RM-b/c), `mean_pool`, `extract_features`, `FrozenHead` (linear), `MLPHead`, `build_head`
 - `tuning.py` — single-config training/eval engine: `train_eval_rma`, `train_eval_rmb`, `eval_rmc`, `RunLogger`, `test_rma`, and the starting defaults `RMA_DEFAULT` / `RMB_DEFAULT` / `RMC_DEFAULT`. **Contains no automatic search** — one call = one config.
 - `job_runner.py` — subprocess worker; dispatches phases `rma` / `rmb` / `rmc` / `final`, writes progress, CSVs, checkpoints, and the final benchmark
-- `rac.py` — FAISS index construction, k-NN retrieval, and logit fusion (`alpha` blends head probabilities with retrieval-based ones)
+- `rac.py` — FAISS index construction, k-NN retrieval, and probability fusion (`alpha` blends the head's softmax probabilities with the retrieval-based ones)
 - `evaluate.py` — classification metrics + computational efficiency measurements
 
 Repo-root scripts: `app.py` (Streamlit control panel) and `run_local_training.py` (standalone local run).
 
 ### RAC mechanism (RM-c)
 
-RAC fuses two probability distributions at inference time:
-- BERT logits from the frozen encoder's classification head
-- Retrieval-based distribution from k nearest neighbors in FAISS index (built from training embeddings)
+RAC fuses two **probability distributions** at inference time — not logits:
+- `p_bert` = **softmax** of the frozen encoder's classification head output (`rac.softmax`, `src/rac.py:90`, applied at `src/tuning.py:241`)
+- `p_retr` = retrieval distribution over the k nearest neighbors in the FAISS index (built from training embeddings only). Already normalized in `retrieval_distribution` (`src/rac.py:87`), with a uniform fallback when every similarity is ≤ 0.
 
-The fusion weight `alpha` (default 0.3) blends them: `final_logits = (1 - alpha) * bert_logits + alpha * retrieval_logits`. The `k` parameter (default 5) controls neighbors used.
+The fusion weight `alpha` (default 0.3) blends them:
+
+```
+p_final = (1 - alpha) * softmax(head(emb)) + alpha * p_retr
+        = (1 - alpha) * p_bert             + alpha * p_retr
+pred    = argmax(p_final)
+```
+
+The `k` parameter (default 5) controls neighbors used.
+
+**Softmax is applied once, on the BERT branch only, before fusion — never after it** (`fuse` → `argmax` directly, `src/rac.py:96-120`). Since both inputs are normalized distributions and the weights sum to 1, `p_final` is already a valid distribution; a second softmax would flatten the margin and can change `argmax` on near-ties. When writing Chapter 4, state the fusion at the probability level — probability-level and logit-level fusion are not equivalent and yield different predictions.
 
 ## Tuning workflow (Streamlit → Vast.ai)
 
@@ -97,7 +107,7 @@ The fusion weight `alpha` (default 0.3) blends them: `final_logits = (1 - alpha)
 
 - Each run is launched as a **separate subprocess** (`src/job_runner.py`), so it survives closing the browser tab; the UI only reads `progress.json` and the CSVs.
 - The Tuning tab also has an additive **batch mode** (expander below the single-config Run button): a Cartesian value-list grid builder, or CSV paste/upload (e.g. `tuning_grids/RMA_TUNING_GRID.csv`, a machine-readable mirror of `tuning_grids/RMA_TUNING_GRID.md`'s Tahap 1 grid) — submits many configs as one job, still one subprocess, one row per config in the same CSVs. Single-config remains the default; batch never replaces it. Failed configs are isolated to `runs_{scenario}_errors.csv` and don't abort the batch. `src/reporting.py` auto-generates grid pivot/heatmap and performance-vs-efficiency scatter figures after a batch (or on demand via the "Regenerate" button).
-- Output goes to `results/vast/`: `runs_{rma,rmb,rmc}.csv` (one row per run, including a free-text `catatan` column recording *why* that config was tried, plus computed `delta_vs_best_f1_macro_pp`/`is_tie_with_best`/`overfit_signal`), `best.json` (best-so-far per scenario by val F1-macro), `history/` (per-epoch val curves, now including `val_f1_judi`), `checkpoints/`, `metrics/`, `tuning_summary.json` (campaign summary).
+- Output goes to `results/vast/`: `runs_{rma,rmb,rmc}.csv` (one row per run, including a free-text `catatan` column recording *why* that config was tried, plus computed `delta_vs_best_f1_macro_pp`/`is_tie_with_best`/`overfit_signal`), `best.json` (best-so-far per scenario by val F1-macro), `history/` (per-epoch val curves, including `val_f1_judi`; **one accumulating file per scenario**, see below), `checkpoints/`, `metrics/`, `tuning_summary.json` (campaign summary).
 - **Hyperparameters are selected on validation only.** `eval_test` defaults to OFF; the test set is opened once, in the **Final** tab.
 - The **Final** tab uses each scenario's best config to produce test metrics plus an inference benchmark for RM-a/b/c measured in **one GPU session**, and auto-evaluates the success criteria.
 
@@ -144,12 +154,22 @@ Full 24-cell table with the rationale for every combination, the Stage-2 runs, t
 Tuning on Vast.ai writes to `results/vast/`:
 - `runs_{rma,rmb,rmc}.csv` — one row per run (config + val metrics + `catatan`), accumulating across sessions
 - `best.json` — best-so-far config per scenario, by val F1-macro
-- `history/{rma,rmb}_run{id}.csv` — per-epoch val curves (use these to spot overfitting)
+- `history/{rma,rmb}_history.csv` — per-epoch val curves (use these to spot overfitting), **one accumulating file per scenario** with a leading `run_id` column. RM-c has none (no training). Written by `append_history` in `src/job_runner.py`, which overwrites rather than duplicates a repeated `run_id`. The older layout was one file per run (`rma_run{id}.csv`); those were merged by `scripts/merge_history.py` and the originals moved to `history/_backup_per_run/` (nothing deleted).
 - `checkpoints/`, `figures/`, `metrics/` — best weights, confusion matrices, and Final-tab outputs (`inference_benchmark.csv`, `final_comparison.csv`, `success_criteria.csv`)
 
 `run_local_training.py` writes the same kinds of artifacts to `results/local/`.
 
-**Current state of `results/`:** the full Vast.ai tuning campaign + final benchmark are complete (2026-07-25) — see `PROGRESS.md` for the authoritative up-to-date status. `results/vast/` is fully populated: `best.json`, `runs_{rma,rmb,rmc}.csv` (124 runs total), `history/` (per-epoch val curves), `checkpoints/` (`rma_best.pt`, `rmb_best.pt`, `rmc_best.pt`), `figures/` (~70 PNGs), `metrics/` (`final_comparison.csv`, `inference_benchmark.csv`, `success_criteria.csv`, grid pivots), `tuning_summary.json`, `hardware.json`. `results/local/` (from `run_local_training.py`) is still empty — not re-run since the clean-slate. `results/figures/` still holds only the 5 EDA figures (that folder was never for model results).
+**`results/combined/` — derived, not a source of truth.** `python scripts/merge_runs.py` gathers the
+run-level CSVs from every experiment folder (`results/vast/`, `results/vast_rmc_cheap_head/`,
+`results_c2/vast_candidate2/`) into three files: `runs_{rma,rmb,rmc}.csv` (27 / 34 / 137 rows), with a
+leading `source` column. Source files are never modified; re-running just rewrites the output. Read
+`results/combined/README.md` before analyzing it — the row key is the pair `(source, run_id)` (each
+folder restarts numbering at 1), `delta_vs_best_f1_macro_pp`/`is_tie_with_best` are only meaningful
+within one `source`, and the Chapter 4 validity rule means **time/memory/latency columns must not be
+compared across `source`** (different machine/session). Chapter 4 numbers are still quoted from
+`results/vast/`.
+
+**Current state of `results/`:** the full Vast.ai tuning campaign + final benchmark are complete (2026-07-25) — see `PROGRESS.md` for the authoritative up-to-date status. `results/vast/` is fully populated: `best.json`, `runs_{rma,rmb,rmc}.csv` (124 runs total), `history/` (per-epoch val curves), `checkpoints/` (`rma_best.pt`, `rmb_best.pt`, `rmc_best.pt`), `figures/` (~70 PNGs), `metrics/` (`final_comparison.csv`, `inference_benchmark.csv`, `success_criteria.csv`, grid pivots), `tuning_summary.json`, `hardware.json`. `results/local/` (from `run_local_training.py`) is still empty — not re-run since the clean-slate. `results/figures/` still holds only the 5 EDA figures (that folder was never for model results). `results/combined/` holds the three cross-folder run-level CSVs described above.
 
 ## Evaluation Metrics
 

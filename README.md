@@ -44,7 +44,7 @@ IndoBERT-with-RAC/
 │   ├── modeling.py           # Model/head factories (RM-a/b/c)
 │   ├── tuning.py             # Engine training/eval per-config (1 call = 1 config)
 │   ├── job_runner.py         # Subprocess worker untuk app.py (fase rma/rmb/rmc/final)
-│   ├── rac.py                # Logit fusion & FAISS retrieval
+│   ├── rac.py                # Fusi probabilitas & FAISS retrieval
 │   ├── reporting.py          # Figur otomatis (kurva, heatmap grid, tradeoff scatter)
 │   └── evaluate.py           # Fungsi evaluasi & pengukuran efisiensi
 │

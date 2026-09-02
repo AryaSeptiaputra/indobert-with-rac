@@ -171,6 +171,30 @@ def load_best_head(out: Path, device):
     return head, c
 
 
+def append_history(out: Path, scenario: str, run_id: int, hist: list) -> Path:
+    """Tambahkan kurva per-epoch SATU run ke history/{scenario}_history.csv.
+
+    Menumpuk lintas run (kolom `run_id` menandai run mana), bukan satu file baru per run --
+    26 run RM-a dulu berarti 26 file terpisah, menyulitkan analisis lintas-run.
+    Idempoten: baris dengan run_id yang sama ditimpa, bukan diduplikasi. Guard ini perlu
+    karena RunLogger.next_id() (src/tuning.py:71) menurunkan id dari jumlah baris
+    runs_{scenario}.csv -- kalau file itu pernah di-reset, id bisa terulang.
+    """
+    p = out / "history" / f"{scenario}_history.csv"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    d = pd.DataFrame(hist)
+    if d.empty:
+        return p
+    d.insert(0, "run_id", run_id)
+    if p.exists():
+        prev = pd.read_csv(p)
+        if "run_id" in prev.columns:
+            prev = prev[prev["run_id"] != run_id]
+        d = pd.concat([prev, d], ignore_index=True)
+    d.to_csv(p, index=False)
+    return p
+
+
 # ----------------------------- fase (1 run = 1 config) -----------------------------
 
 def _run_one_rma(cfg_input, note, eval_test, ctx, out, logger, batch_id=""):
@@ -203,7 +227,7 @@ def _run_one_rma(cfg_input, note, eval_test, ctx, out, logger, batch_id=""):
                         title=f"RM-a run#{rid} (test)")
         print(f"[rma] TEST F1-macro {tm['f1_macro']:.4f}", flush=True)
     row = logger.log(row)
-    pd.DataFrame(hist).to_csv(out / "history" / f"rma_run{rid}.csv", index=False)
+    append_history(out, "rma", rid, hist)
     try:
         reporting.training_curve(out, "rma", rid, hist)
     except Exception as e:
@@ -262,7 +286,7 @@ def _run_one_rmb(cfg_input, note, eval_test, ctx, out, logger, batch_id="", feat
                         out / "figures" / f"rmb_run{rid}_pr.png", title=f"RM-b run#{rid} (test)")
         print(f"[rmb] TEST F1-macro {tm['f1_macro']:.4f}", flush=True)
     row = logger.log(row)
-    pd.DataFrame(hist).to_csv(out / "history" / f"rmb_run{rid}.csv", index=False)
+    append_history(out, "rmb", rid, hist)
     try:
         reporting.training_curve(out, "rmb", rid, hist)
     except Exception as e:
