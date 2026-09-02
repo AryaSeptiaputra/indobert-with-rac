@@ -44,9 +44,16 @@ class RMAConfig(BaseModel):
     def grad_accum(self) -> int:
         """Langkah akumulasi gradien yang dibutuhkan untuk mencapai `batch` efektif.
 
-        Akumulasi gradien ekuivalen secara matematis dengan batch besar untuk
-        BERT (LayerNorm, bukan BatchNorm) selama loss dibagi jumlah akumulasi,
-        sehingga ini murni kompromi memori dan bukan kompromi hasil.
+        RUMUS gradiennya ekuivalen dengan batch besar (BERT memakai LayerNorm,
+        bukan BatchNorm, dan loss dibagi jumlah akumulasi), tetapi RUN-nya tidak.
+        `DataLoader` dengan ukuran batch berbeda mengonsumsi RNG secara berbeda,
+        sehingga mask dropout dan komposisi tiap batch ikut berubah. Terukur di
+        kampanye lokal: `micro_batch` efektif 8 versus 16 pada konfigurasi yang
+        sama persis memberi val F1-macro 0,974873 versus 0,977266.
+
+        Karena itu `micro_batch` harus dikunci untuk seluruh sel satu grid dan
+        diperlakukan sebagai bagian identitas konfigurasi, bukan sekadar knob
+        memori yang bebas diubah di tengah kampanye.
         """
         return max(1, self.batch // self.effective_micro_batch)
 

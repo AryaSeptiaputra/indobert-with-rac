@@ -147,3 +147,89 @@ class TestFinal:
         runner.run("rmb", {"epochs": 1})
         with pytest.raises(RuntimeError, match="belum punya run"):
             runner.run_final()
+
+
+class TestResume:
+    """Batch yang terputus harus bisa dijalankan ulang tanpa mengulang pekerjaan."""
+
+    def test_tanda_pengenal_melengkapi_nilai_default(self, runner) -> None:
+        parsial = runner.config_signature("rmb", {"epochs": 3})
+        lengkap = runner.config_signature(
+            "rmb",
+            {"head_arch": "linear", "hidden_dim": 256, "epochs": 3, "lr": 2e-4,
+             "dropout": 0.1, "weight_decay": 0.01, "batch": 32, "seed": 42},
+        )
+        assert parsial == lengkap
+
+    def test_konfigurasi_berbeda_bertanda_berbeda(self, runner) -> None:
+        assert runner.config_signature("rmb", {"epochs": 3}) != runner.config_signature(
+            "rmb", {"epochs": 4}
+        )
+
+    def test_micro_batch_dinormalkan_ke_nilai_efektif(self, runner) -> None:
+        """micro_batch 32 pada batch 16 menghasilkan run yang sama dengan 16."""
+        assert runner.config_signature(
+            "rma", {"batch": 16, "micro_batch": 32}
+        ) == runner.config_signature("rma", {"batch": 16, "micro_batch": 16})
+
+    def test_micro_batch_efektif_berbeda_bertanda_berbeda(self, runner) -> None:
+        """DataLoader dengan batch 8 dan 16 mengonsumsi RNG berbeda, jadi hasilnya beda."""
+        assert runner.config_signature(
+            "rma", {"batch": 16, "micro_batch": 8}
+        ) != runner.config_signature("rma", {"batch": 16, "micro_batch": 16})
+
+    def test_riwayat_kosong_tidak_melewati_apa_pun(self, runner) -> None:
+        assert runner.completed_signatures("rmb") == set()
+        requests = [{"config": {"epochs": 1}}, {"config": {"epochs": 2}}]
+        assert len(runner.pending_requests("rmb", requests)) == 2
+
+    def test_run_yang_sudah_ada_terdeteksi(self, runner) -> None:
+        runner.run("rmb", {"epochs": 2}, note="run pertama")
+        assert runner.config_signature("rmb", {"epochs": 2}) in runner.completed_signatures(
+            "rmb"
+        )
+
+    def test_pending_menyaring_yang_sudah_dijalankan(self, runner) -> None:
+        runner.run("rmb", {"epochs": 1})
+        pending = runner.pending_requests(
+            "rmb", [{"config": {"epochs": 1}}, {"config": {"epochs": 2}}]
+        )
+        assert len(pending) == 1
+        assert pending[0].config["epochs"] == 2
+
+    def test_pending_membuang_kembar_di_dalam_permintaan(self, runner) -> None:
+        pending = runner.pending_requests(
+            "rmb",
+            [{"config": {"epochs": 1}}, {"config": {"epochs": 1}}, {"config": {"epochs": 2}}],
+        )
+        assert len(pending) == 2
+
+    def test_batch_melanjutkan_dari_yang_terakhir(self, runner, tmp_path) -> None:
+        """Skenario nyata: batch terputus di tengah, lalu dijalankan ulang apa adanya."""
+        grid = [{"config": {"epochs": e}, "note": f"sel epochs={e}"} for e in (1, 2, 3)]
+
+        runner.run_batch("rmb", grid[:2], batch_id="percobaan_pertama")
+        assert len(pd.read_csv(tmp_path / "runs_rmb.csv")) == 2
+
+        lanjutan = runner.run_batch("rmb", grid, batch_id="percobaan_lanjutan")
+        assert len(lanjutan) == 1
+        assert lanjutan.loc[0, "epochs"] == 3
+        assert len(pd.read_csv(tmp_path / "runs_rmb.csv")) == 3
+
+    def test_batch_tanpa_konfigurasi_baru_mengembalikan_kosong(self, runner) -> None:
+        grid = [{"config": {"epochs": 1}}]
+        runner.run_batch("rmb", grid)
+        assert runner.run_batch("rmb", grid).empty
+
+    def test_resume_false_menjalankan_ulang(self, runner, tmp_path) -> None:
+        """Pengukuran ulang yang disengaja tetap mungkin."""
+        grid = [{"config": {"epochs": 1}}]
+        runner.run_batch("rmb", grid)
+        ulang = runner.run_batch("rmb", grid, resume=False)
+        assert len(ulang) == 1
+        assert len(pd.read_csv(tmp_path / "runs_rmb.csv")) == 2
+
+    def test_penomoran_run_berlanjut_setelah_terputus(self, runner) -> None:
+        runner.run_batch("rmb", [{"config": {"epochs": e}} for e in (1, 2)])
+        lanjutan = runner.run_batch("rmb", [{"config": {"epochs": e}} for e in (1, 2, 3)])
+        assert lanjutan.loc[0, "run_id"] == 3

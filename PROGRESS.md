@@ -69,8 +69,18 @@ warmup=0,1, wd=0,01`) sudah dijalankan dan tercatat sebagai run #1 di
 | Trainable params | 109.485.314 |
 
 **Memori aman.** Sisa 1.757 MB pada `micro_batch=8`. Kampanye 3090 memakai
-`micro_batch=16` dengan puncak 2.309 MB, jadi 16 pun sebenarnya muat di kartu
-ini; menaikkannya akan memperbaiki utilisasi GPU dan memangkas total waktu.
+`micro_batch=16` dengan puncak 2.309 MB, jadi 16 pun muat di kartu ini dan
+memberi utilisasi GPU lebih baik.
+
+**Tetapi `micro_batch` bukan knob bebas.** Rumus gradien akumulasi memang
+ekuivalen dengan batch besar, tetapi run-nya tidak: `DataLoader` dengan ukuran
+batch berbeda mengonsumsi RNG berbeda, sehingga mask dropout dan komposisi batch
+ikut berubah. Terbukti dari tiga run berkonfigurasi sama di riwayat: run #1 dan
+#2 (`micro_batch` efektif 8) memberi kurva yang IDENTIK seluruhnya, sedangkan
+run #3 (efektif 16) memberi kurva berbeda dan F1-macro 0,977266 versus 0,974873.
+Artinya training deterministik terhadap seed, tetapi `micro_batch` adalah bagian
+identitas konfigurasi. Grid RM-a mengunci `micro_batch = 32` (efektif 16 pada
+batch 16), dan nilai itu tidak boleh berubah di tengah kampanye.
 
 **Biaya sebenarnya jauh di atas perkiraan awal.** Estimasi 5x perlambatan
 berdasarkan rasio SM dan bandwidth ternyata keliru: pengukuran memberi **7,7x**

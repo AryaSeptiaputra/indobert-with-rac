@@ -1,19 +1,19 @@
 {
   "rma": {
-    "run_id": 1,
+    "run_id": 8,
     "config": {
-      "lr": 2e-05,
-      "epochs": 5,
+      "lr": 1e-05,
+      "epochs": 8,
       "batch": 16,
       "warmup_ratio": 0.1,
       "weight_decay": 0.01,
-      "micro_batch": 8,
+      "micro_batch": 32,
       "seed": 42
     },
-    "val_f1_macro": 0.9748729008477259,
-    "train_time_s": 1100.99,
+    "val_f1_macro": 0.979534235118442,
+    "train_time_s": 1117.07,
     "trainable_params": 109485314,
-    "peak_mem_mb": 2338.8,
+    "peak_mem_mb": 2301.8,
     "model_name": "indobenchmark/indobert-base-p2"
   }
 }

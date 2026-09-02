@@ -22,12 +22,13 @@ from pathlib import Path
 
 import pandas as pd
 import torch
+from pydantic import ValidationError
 from torch.utils.data import DataLoader
 
 from src.config import SCENARIOS, settings
 from src.models.comment_dataset import GamblingCommentDataset
 from src.models.heads import build_encoder, build_finetune_model, build_head, mean_pool
-from src.models.schemas import RunRequest, parse_config
+from src.models.schemas import CONFIG_MODELS, RunRequest, parse_config
 from src.services.data import ExperimentData
 from src.services.evaluation import RUN_METRIC_KEYS, ClassificationEvaluator, EfficiencyProfiler
 from src.services.features import FeatureExtractor, FeatureSet
@@ -35,7 +36,7 @@ from src.services.rac import RACClassifier, softmax
 from src.services.reporting import FigureReporter
 from src.services.run_log import BestTracker, HistoryWriter, RunLogger
 from src.services.training import RMATrainer, RMBTrainer, RMCEvaluator
-from src.utils.io import write_csv, write_json
+from src.utils.io import read_csv, write_csv, write_json
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -50,6 +51,11 @@ MIN_TIME_REDUCTION_PCT = 50.0
 MIN_CRITERIA_PASSED = 2
 
 DISPLAY_NAMES = {"rma": "RM-a", "rmb": "RM-b", "rmc": "RM-c"}
+
+# Presisi pembulatan saat membandingkan nilai float antar konfigurasi. Cukup
+# ketat untuk membedakan 1e-5 dari 2e-5, cukup longgar untuk menyerap galat
+# pembacaan ulang dari CSV.
+SIGNATURE_PRECISION = 12
 
 
 class CampaignRunner:
@@ -158,11 +164,111 @@ class CampaignRunner:
         }[scenario]
         return handler(parsed, run_id, run_logger, note, eval_test, batch_id)
 
+    def config_signature(
+        self,
+        scenario: str,
+        config: dict[str, object] | None,
+    ) -> tuple[tuple[str, object], ...]:
+        """Tanda pengenal satu konfigurasi, dipakai untuk mendeteksi run kembar.
+
+        Konfigurasi dilengkapi nilai default lebih dulu, sehingga `{"lr": 2e-5}`
+        dan konfigurasi lengkap dengan nilai yang sama menghasilkan tanda yang
+        identik.
+
+        Untuk RM-a, `micro_batch` dinormalkan ke nilai EFEKTIFNYA
+        (`min(batch, micro_batch)`). Nilai efektif itulah yang menentukan ukuran
+        batch di `DataLoader`, dan karena itu menentukan lintasan training;
+        `micro_batch=32` pada `batch=16` menghasilkan run yang persis sama
+        dengan `micro_batch=16`.
+
+        Args:
+            scenario: Kode skenario.
+            config: Hyperparameter mentah; `None` berarti seluruh default.
+
+        Returns:
+            Tuple pasangan (nama, nilai) yang terurut dan bisa di-hash.
+
+        Raises:
+            ValueError: Kalau skenario tidak dikenal.
+            pydantic.ValidationError: Kalau ada nilai di luar batas.
+        """
+        parsed = parse_config(scenario, config)
+        values = parsed.model_dump()
+        if scenario == "rma":
+            values["micro_batch"] = parsed.effective_micro_batch
+        return self._normalise(values)
+
+    def completed_signatures(self, scenario: str) -> set[tuple[tuple[str, object], ...]]:
+        """Tanda pengenal seluruh konfigurasi yang sudah tercatat di riwayat.
+
+        Args:
+            scenario: Kode skenario.
+
+        Returns:
+            Himpunan tanda pengenal; kosong bila riwayat belum ada.
+
+        Raises:
+            CorruptArtifactError: Kalau berkas riwayat ada tapi tidak bisa diurai.
+        """
+        frame = read_csv(self.out_dir / f"runs_{scenario}.csv")
+        if frame.empty:
+            return set()
+
+        fields = list(CONFIG_MODELS[scenario].model_fields)
+        available = [name for name in fields if name in frame.columns]
+        if not available:
+            return set()
+
+        signatures = set()
+        for row in frame[available + self._effective_columns(scenario, frame)].to_dict(
+            "records"
+        ):
+            values = {name: row[name] for name in available}
+            if scenario == "rma" and "micro_batch_eff" in row:
+                values["micro_batch"] = row["micro_batch_eff"]
+            signatures.add(self._normalise(values))
+        return signatures
+
+    def pending_requests(
+        self,
+        scenario: str,
+        requests: list[RunRequest | dict[str, object]],
+    ) -> list[RunRequest]:
+        """Saring konfigurasi yang BELUM pernah dijalankan.
+
+        Args:
+            scenario: Kode skenario.
+            requests: Daftar permintaan run.
+
+        Returns:
+            Sublist berisi permintaan yang belum ada padanannya di riwayat,
+            urutannya dipertahankan. Konfigurasi yang nilainya tidak sah ikut
+            diteruskan, bukan dilempar dari sini: kegagalannya harus dicatat
+            oleh `run_batch` ke `runs_{scenario}_errors.csv` bersama konteks
+            batch-nya, bukan membatalkan seluruh antrean.
+        """
+        done = self.completed_signatures(scenario)
+        pending: list[RunRequest] = []
+        seen: set[tuple[tuple[str, object], ...]] = set()
+
+        for item in self._as_requests(requests):
+            try:
+                signature = self.config_signature(scenario, item.config)
+            except (ValueError, ValidationError):
+                pending.append(item)
+                continue
+            if signature in done or signature in seen:
+                continue
+            seen.add(signature)
+            pending.append(item)
+        return pending
+
     def run_batch(
         self,
         scenario: str,
         requests: list[RunRequest | dict[str, object]],
         batch_id: str = "",
+        resume: bool = True,
     ) -> pd.DataFrame:
         """Jalankan sederet konfigurasi berurutan dengan isolasi kegagalan.
 
@@ -171,9 +277,14 @@ class CampaignRunner:
             requests: Daftar `RunRequest`, atau dict berisi kunci `config`,
                 `note`, dan `eval_test`.
             batch_id: Penanda batch; kosong berarti dibuat dari waktu sekarang.
+            resume: Lewati konfigurasi yang sudah ada di riwayat. Aktif secara
+                default supaya batch yang terputus bisa dijalankan ulang apa
+                adanya tanpa mengulang pekerjaan yang sudah selesai. Setel False
+                bila memang ingin mengukur ulang konfigurasi yang sama.
 
         Returns:
-            DataFrame berisi satu baris per konfigurasi yang berhasil.
+            DataFrame berisi satu baris per konfigurasi yang berhasil dijalankan
+            pada pemanggilan ini; kosong bila semuanya sudah pernah dijalankan.
 
         Raises:
             ValueError: Kalau skenario tidak dikenal.
@@ -182,11 +293,23 @@ class CampaignRunner:
             raise ValueError(f"skenario tak dikenal: {scenario!r}")
 
         batch_id = batch_id or f"{scenario}_batch_{time.strftime('%Y%m%d_%H%M%S')}"
-        items = [
-            item if isinstance(item, RunRequest) else RunRequest.model_validate(item)
-            for item in requests
-        ]
-        logger.info("Batch %s: %d konfigurasi", batch_id, len(items))
+        requested = self._as_requests(requests)
+
+        if resume:
+            items = self.pending_requests(scenario, requested)
+            skipped = len(requested) - len(items)
+            if skipped:
+                logger.info(
+                    "Batch %s: %d dari %d konfigurasi sudah ada di riwayat, dilewati",
+                    batch_id, skipped, len(requested),
+                )
+            if not items:
+                logger.info("Batch %s: tidak ada konfigurasi baru", batch_id)
+                return pd.DataFrame()
+        else:
+            items = requested
+
+        logger.info("Batch %s: %d konfigurasi akan dijalankan", batch_id, len(items))
 
         rows: list[dict[str, object]] = []
         started = time.perf_counter()
@@ -700,6 +823,34 @@ class CampaignRunner:
     # ------------------------------------------------------------------
     # Pembantu
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _as_requests(
+        requests: list[RunRequest | dict[str, object]],
+    ) -> list[RunRequest]:
+        return [
+            item if isinstance(item, RunRequest) else RunRequest.model_validate(item)
+            for item in requests
+        ]
+
+    @staticmethod
+    def _effective_columns(scenario: str, frame: pd.DataFrame) -> list[str]:
+        if scenario == "rma" and "micro_batch_eff" in frame.columns:
+            return ["micro_batch_eff"]
+        return []
+
+    @staticmethod
+    def _normalise(values: dict[str, object]) -> tuple[tuple[str, object], ...]:
+        normalised: list[tuple[str, object]] = []
+        for name in sorted(values):
+            value = values[name]
+            if isinstance(value, bool):
+                normalised.append((name, value))
+            elif isinstance(value, (int, float)):
+                normalised.append((name, round(float(value), SIGNATURE_PRECISION)))
+            else:
+                normalised.append((name, str(value)))
+        return tuple(normalised)
 
     @staticmethod
     def _metric_columns(
