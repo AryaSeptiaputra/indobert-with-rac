@@ -1,0 +1,25 @@
+# Metadata paket saja. Dependensi tetap dikelola lewat requirements.txt /
+# requirements-dev.txt; berkas ini ada supaya `pip install -e .` mendaftarkan
+# paket `src` sehingga `from src... import ...` berfungsi dari notebook, tests,
+# maupun subprocess worker tanpa memanipulasi sys.path.
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "indobert-with-rac"
+version = "2.0.0"
+description = "Analisis trade-off performa dan efisiensi strategi adaptasi IndoBERT dengan RAC"
+requires-python = ">=3.12"
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools.packages.find]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

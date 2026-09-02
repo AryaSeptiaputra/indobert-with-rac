@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=PROJECT_ROOT / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -114,6 +114,17 @@ TEXT_COLUMN = "text_clean"
 RAW_TEXT_COLUMN = "textOriginal"
 LABEL_COLUMN = "label"
 CLASS_NAMES: tuple[str, str] = ("non-judi (0)", "judi (1)")
+
+# Placeholder hasil preprocessing. Didaftarkan sebagai additional_special_tokens
+# agar tiap placeholder menjadi satu token utuh, bukan terpecah "[", "url", "]".
+URL_PLACEHOLDER = "[URL]"
+MENTION_PLACEHOLDER = "[MENTION]"
+NUM_PLACEHOLDER = "[NUM]"
+SPECIAL_TOKENS: tuple[str, str, str] = (
+    URL_PLACEHOLDER,
+    MENTION_PLACEHOLDER,
+    NUM_PLACEHOLDER,
+)
 
 
 @lru_cache(maxsize=1)
