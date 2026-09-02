@@ -4,7 +4,7 @@
 |---|---|
 | **Proyek** | Analisis Trade-off Performa & Efisiensi Adaptasi IndoBERT dengan RAC untuk Deteksi Komentar Promosi Judi Daring |
 | **Penulis** | Arya Eka Septiaputra (152022190) — Informatika ITENAS 2026 |
-| **Sumber data** | `dataset/raw/data_labeling.csv` |
+| **Sumber data** | `data/raw/data_labeling.csv` |
 | **Random seed** | 42 |
 | **Notebook** | `notebooks/01_eda.ipynb` (Bagian 2) |
 | **Tokenizer** | `indobenchmark/indobert-base-p2` (`do_lower_case=True`) |
@@ -112,7 +112,7 @@ Contoh baris yang jadi kosong: `😂😂😂😂😂😂`, `🎉🎉🎉🎉`, `
 
 ## 5. Case Folding — Dilewati (2.4)
 
-**Tidak diuji.** `tokenizer.do_lower_case = True` pada `indobert-base-p2` → IndoBERT sudah *uncased* dan menangani lowercasing secara internal. Lowercase manual dipastikan **redundan**. Dicatat "dilewati" di Bagian 3 tanpa pengukuran (sesuai `EDA_PLAN.md`).
+**Tidak diuji.** `tokenizer.do_lower_case = True` pada `indobert-base-p2` → IndoBERT sudah *uncased* dan menangani lowercasing secara internal. Lowercase manual dipastikan **redundan**. Dicatat "dilewati" di Bagian 3 tanpa pengukuran (sesuai `docs/EDA_PLAN.md`).
 
 ---
 
@@ -120,7 +120,7 @@ Contoh baris yang jadi kosong: `😂😂😂😂😂😂`, `🎉🎉🎉🎉`, `
 
 - **Tokenizer:** seluruh pengukuran `[UNK]` memakai `indobenchmark/indobert-base-p2` (bukan p1 seperti Bagian 1 lama) — koreksi yang disepakati. Statistik panjang token Bagian 1 tetap valid lintas p1/p2 (vocab WordPiece sama).
 - **Random seed:** 42.
-- **Lingkungan:** lokal (pandas/CPU + tokenizer transformers), tanpa GPU — sesuai catatan environment `EDA_PLAN.md`.
+- **Lingkungan:** lokal (pandas/CPU + tokenizer transformers), tanpa GPU — sesuai catatan environment `docs/EDA_PLAN.md`.
 - **Sifat data:** tidak ada baris yang dipersist; seluruh transformasi hanya di memory untuk pengukuran.
 
 ---

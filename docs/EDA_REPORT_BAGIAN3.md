@@ -4,7 +4,7 @@
 |---|---|
 | **Proyek** | Analisis Trade-off Performa & Efisiensi Adaptasi IndoBERT dengan RAC untuk Deteksi Komentar Promosi Judi Daring |
 | **Penulis** | Arya Eka Septiaputra (152022190) — Informatika ITENAS 2026 |
-| **Sumber data** | `dataset/raw/data_labeling.csv` |
+| **Sumber data** | `data/raw/data_labeling.csv` |
 | **Random seed** | 42 |
 | **Notebook** | `notebooks/01_eda.ipynb` (Bagian 3) |
 | **Sifat fase** | Keputusan — menetapkan spesifikasi final preprocessing |

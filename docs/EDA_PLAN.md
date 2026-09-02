@@ -2,7 +2,7 @@
 
 Dokumen ini mendefinisikan struktur dan tujuan setiap bagian EDA sebelum implementasi ke `notebooks/01_eda.ipynb`. EDA hanya **mengukur dan memutuskan**; eksekusi dedup, penyaringan, transformasi, dan split dilakukan di fase preprocessing terpisah (`02_preprocessing.ipynb`).
 
-> **Catatan revisi (2026-07-06):** Struktur di bawah menggantikan versi sebelumnya. Penomoran Bagian 1/2/3 dipertahankan agar konsisten dengan `EDA_REPORT_BAGIAN1.md` dan notebook yang sudah ada, tapi definisi tiap Bagian diubah. Sebelumnya Bagian 2 dan 3 dipisah berdasarkan *jenis keputusan* (filtering vs transformasi) — ini membuat pengukuran baru (mis. uji efektivitas NFKC) "nyempil" di dalam bagian yang seharusnya berisi keputusan, dan menimbulkan kontradiksi antara diagram linear dengan catatan "sifat iteratif". Sekarang pemisahan berdasarkan *jenis aktivitas*: deskripsi data mentah → uji dampak kandidat transformasi → keputusan. Total pekerjaan tidak bertambah, hanya pengelompokannya yang diperbaiki.
+> **Catatan revisi (2026-07-06):** Struktur di bawah menggantikan versi sebelumnya. Penomoran Bagian 1/2/3 dipertahankan agar konsisten dengan `docs/EDA_REPORT_BAGIAN1.md` dan notebook yang sudah ada, tapi definisi tiap Bagian diubah. Sebelumnya Bagian 2 dan 3 dipisah berdasarkan *jenis keputusan* (filtering vs transformasi) — ini membuat pengukuran baru (mis. uji efektivitas NFKC) "nyempil" di dalam bagian yang seharusnya berisi keputusan, dan menimbulkan kontradiksi antara diagram linear dengan catatan "sifat iteratif". Sekarang pemisahan berdasarkan *jenis aktivitas*: deskripsi data mentah → uji dampak kandidat transformasi → keputusan. Total pekerjaan tidak bertambah, hanya pengelompokannya yang diperbaiki.
 
 ---
 
@@ -31,7 +31,7 @@ Dua aturan non-negotiable:
 
 ## Bagian 1 — Pengukuran Deskriptif Data Mentah
 
-**Status: sebagian sudah dieksekusi.** Lihat `EDA_REPORT_BAGIAN1.md` untuk hasil lengkap dari analisis di bawah yang ditandai ✅. Item yang ditandai ⏳ adalah **susulan** yang perlu dilengkapi sebelum lanjut ke Bagian 2 — semuanya murni komputasi dari data mentah, tidak butuh keputusan transformasi apa pun lebih dulu.
+**Status: sebagian sudah dieksekusi.** Lihat `docs/EDA_REPORT_BAGIAN1.md` untuk hasil lengkap dari analisis di bawah yang ditandai ✅. Item yang ditandai ⏳ adalah **susulan** yang perlu dilengkapi sebelum lanjut ke Bagian 2 — semuanya murni komputasi dari data mentah, tidak butuh keputusan transformasi apa pun lebih dulu.
 
 **Tujuan:** Memotret bentuk dan karakteristik dasar dataset apa adanya, tanpa mengubah atau memutuskan apa pun.
 

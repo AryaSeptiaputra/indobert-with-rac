@@ -4,7 +4,7 @@
 |---|---|
 | **Proyek** | Analisis Trade-off Performa & Efisiensi Adaptasi IndoBERT dengan RAC untuk Deteksi Komentar Promosi Judi Daring |
 | **Penulis** | Arya Eka Septiaputra (152022190) — Informatika ITENAS 2026 |
-| **Sumber data** | `dataset/raw/data_labeling.csv` |
+| **Sumber data** | `data/raw/data_labeling.csv` |
 | **Random seed** | 42 |
 | **Notebook** | `notebooks/01_eda.ipynb` (Bagian 1) |
 | **Sifat fase** | Deskriptif — **tidak ada baris yang diubah, dibuang, atau disimpan** |
@@ -61,7 +61,7 @@ Sisanya metadata yang akan didrop saat preprocessing: `number`, `commentId`, `au
 
 ## 3. Distribusi Label (1.1)
 
-![Distribusi Label](results/figures/label_distribution.png)
+![Distribusi Label](outputs/figures/eda/label_distribution.png)
 
 - Kelas 0 (non-judi): **8.560 (60,13%)**
 - Kelas 1 (judi): **5.677 (39,87%)**
@@ -122,9 +122,9 @@ Fungsi `normalize_text` saat ini hanya melakukan *lowercase*, hapus URL/mention,
 
 ## 6. Statistik Panjang Teks (1.4)
 
-![Histogram Panjang Teks](results/figures/text_length_histogram.png)
+![Histogram Panjang Teks](outputs/figures/eda/text_length_histogram.png)
 
-![Boxplot Panjang Teks](results/figures/text_length_boxplot.png)
+![Boxplot Panjang Teks](outputs/figures/eda/text_length_boxplot.png)
 
 | Metrik token | Kelas 0 | Kelas 1 |
 |--------------|---------|---------|
@@ -134,7 +134,7 @@ Komentar **kelas 1 cenderung lebih panjang** — konsisten dengan pola spam: nam
 
 **Distribusi panjang token (gabungan) & keputusan `max_length`:**
 
-![Distribusi Panjang Token](results/figures/token_length_distribution.png)
+![Distribusi Panjang Token](outputs/figures/eda/token_length_distribution.png)
 
 | Persentil | Token |
 |-----------|-------|
@@ -149,7 +149,7 @@ Komentar **kelas 1 cenderung lebih panjang** — konsisten dengan pola spam: nam
 
 ## 7. Distribusi Temporal (1.5)
 
-![Distribusi Temporal](results/figures/temporal_distribution.png)
+![Distribusi Temporal](outputs/figures/eda/temporal_distribution.png)
 
 - Rentang: **2025-07-31 s/d 2025-10-01** (≈ 62 hari, ~2 bulan).
 - Bersifat deskriptif; data terkonsentrasi pada periode pengumpulan komentar dari kanal target.
@@ -204,7 +204,7 @@ Konsekuensi:
 - **Kelayakan data:** ~1.700–2.000 sampel kelas 1, dibagi 70/15/15, menyisakan ~1.200–1.400 untuk train — masih memadai untuk fine-tuning, namun tipis untuk RM-b/RM-c. **Hitung angka pasti di Bagian 2 sebelum melanjutkan.**
 
 ### 9.2 Dedup-sebelum-split bukan opsi, melainkan syarat validitas
-Sudah ditetapkan di "Prinsip Operasi" `EDA_PLAN.md`; temuan §5 mengonfirmasi besarnya risiko leakage secara empiris.
+Sudah ditetapkan di "Prinsip Operasi" `docs/EDA_PLAN.md`; temuan §5 mengonfirmasi besarnya risiko leakage secara empiris.
 
 ### 9.3 `max_length = 128` final
 Tidak perlu dinaikkan; 0,04% truncation dapat diabaikan.
@@ -236,9 +236,9 @@ Bagian 1 memunculkan urutan pertanyaan yang menjadi tulang punggung Bagian 2:
 ## 11. Catatan Reproduktibilitas & Teknis
 
 - **Random seed:** 42 (sampling manual). Konsisten dengan rencana split.
-- **Figur tersimpan** di `results/figures/`: `label_distribution.png`, `text_length_histogram.png`, `text_length_boxplot.png`, `token_length_distribution.png`, `temporal_distribution.png`.
+- **Figur tersimpan** di `outputs/figures/eda/`: `label_distribution.png`, `text_length_histogram.png`, `text_length_boxplot.png`, `token_length_distribution.png`, `temporal_distribution.png`.
 - **Catatan tokenizer:** notebook kini **diselaraskan ke `indobenchmark/indobert-base-p2`** (sel 1.4 dan seluruh pengukuran token). Sebelumnya Bagian 1 dijalankan dengan p1; karena kedua model **berbagi vocabulary WordPiece yang sama** (`do_lower_case=True`), statistik panjang token pada laporan ini **tetap valid**. Penyelarasan ke p2 penting terutama untuk Bagian 2 (pengukuran presisi `[UNK]`). ✅ *(sudah dieksekusi)*
-- **Lingkungan:** EDA dijalankan lokal (pandas/CPU), tanpa GPU — sesuai catatan environment `EDA_PLAN.md`.
+- **Lingkungan:** EDA dijalankan lokal (pandas/CPU), tanpa GPU — sesuai catatan environment `docs/EDA_PLAN.md`.
 
 ---
 
@@ -246,7 +246,7 @@ Bagian 1 memunculkan urutan pertanyaan yang menjadi tulang punggung Bagian 2:
 
 ## 12. Susulan — Pengukuran Deskriptif Tambahan
 
-Lima analisis susulan (⏳ pada `EDA_PLAN.md`) yang murni komputasi dari data mentah, melengkapi Bagian 1 sebelum lanjut ke Bagian 2. Semua bersifat **deskriptif** — tidak ada baris yang diubah/dibuang.
+Lima analisis susulan (⏳ pada `docs/EDA_PLAN.md`) yang murni komputasi dari data mentah, melengkapi Bagian 1 sebelum lanjut ke Bagian 2. Semua bersifat **deskriptif** — tidak ada baris yang diubah/dibuang.
 
 > Basis hitung: `valid` = data non-missing = **14.227** baris (raw kelas 0/1 = 8.550 / 5.677; catatan: 10 baris `textOriginal` kosong seluruhnya berlabel 0, sehingga L0 valid 8.550 vs 8.560 di §1).
 
@@ -322,4 +322,4 @@ Top-20 komentar terpanjang seluruhnya **kelas 0** berupa diskusi esports (MLBB) 
 
 ---
 
-*Laporan ini menjadi input untuk Bagian 2 (`EDA_REPORT_BAGIAN2.md`) & Bagian 3 (`EDA_REPORT_BAGIAN3.md`), dan bahan Bab 4 (Hasil & Pembahasan).*
+*Laporan ini menjadi input untuk Bagian 2 (`docs/EDA_REPORT_BAGIAN2.md`) & Bagian 3 (`docs/EDA_REPORT_BAGIAN3.md`), dan bahan Bab 4 (Hasil & Pembahasan).*
