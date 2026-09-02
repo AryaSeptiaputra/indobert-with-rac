@@ -32,6 +32,17 @@ data/interim/*
 data/processed/*
 !data/**/.gitkeep
 
+# Dataset skripsi SENGAJA ikut di-commit demi reproduktibilitas: penguji harus
+# bisa menjalankan ulang seluruh pipeline dari repo ini. Keputusan sadar, bukan
+# kelalaian. Berkas data lain di luar daftar ini tetap terblokir oleh pola di
+# atas.
+!data/raw/data_labeling.csv
+!data/interim/data_clean.csv
+!data/processed/train.csv
+!data/processed/val.csv
+!data/processed/test.csv
+!data/processed/metadata.json
+
 # ---------------------------------------------------------------------------
 # Keluaran eksperimen
 # Seluruh isi outputs/ bisa dihasilkan ulang oleh notebook, KECUALI berkas
