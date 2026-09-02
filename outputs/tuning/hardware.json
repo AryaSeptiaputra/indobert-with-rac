@@ -1,0 +1,10 @@
+{
+  "gpu": "NVIDIA GeForce RTX 3050 Laptop GPU",
+  "cuda_available": true,
+  "cuda_version": "13.0",
+  "torch": "2.12.1+cu130",
+  "transformers": "5.12.1",
+  "vram_total_mb": 4096,
+  "recorded_at": "2026-09-02 13:56:23",
+  "nvidia_smi": "NVIDIA GeForce RTX 3050 Laptop GPU, 592.00, 4096 MiB"
+}

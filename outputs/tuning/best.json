@@ -1,0 +1,19 @@
+{
+  "rma": {
+    "run_id": 1,
+    "config": {
+      "lr": 2e-05,
+      "epochs": 5,
+      "batch": 16,
+      "warmup_ratio": 0.1,
+      "weight_decay": 0.01,
+      "micro_batch": 8,
+      "seed": 42
+    },
+    "val_f1_macro": 0.9748729008477259,
+    "train_time_s": 1100.99,
+    "trainable_params": 109485314,
+    "peak_mem_mb": 2338.8,
+    "model_name": "indobenchmark/indobert-base-p2"
+  }
+}

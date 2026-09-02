@@ -1,8 +1,7 @@
 # PROGRESS — IndoBERT-with-RAC
 
 Status proyek skripsi ITENAS 2026 (trade-off performa versus efisiensi tiga
-strategi adaptasi IndoBERT untuk deteksi komentar judi). Terakhir diperbarui:
-**2026-09-02**.
+strategi adaptasi IndoBERT untuk deteksi komentar judi). Terakhir diperbarui: **2026-09-02**.
 
 ## Ringkasan tahap
 
@@ -11,7 +10,7 @@ strategi adaptasi IndoBERT untuk deteksi komentar judi). Terakhir diperbarui:
 | EDA | Selesai | `docs/EDA_REPORT_BAGIAN1/2/3.md`, `outputs/figures/eda/` |
 | Preprocessing | Selesai | `data/processed/`, `DATASET.md` |
 | Penulisan ulang kode ke standar `writer-code` | Selesai | `src/`, `tests/`, `notebooks/` |
-| Kampanye tuning lokal (RTX 3050) | **Belum dijalankan** | target `outputs/tuning/` |
+| Kampanye tuning lokal (RTX 3050) | **Berjalan** (RM-a 1 dari 26 run) | `outputs/tuning/` |
 | Benchmark final lokal (TEST, satu sesi) | **Belum dijalankan** | target `outputs/tuning/metrics/` |
 | Penulisan Bab 4 | Belum | menunggu angka lokal |
 
@@ -51,48 +50,66 @@ train 6.588 / val 1.402 / test 1.405 (total 9.395, sekitar 18% kelas judi, rasio
 Model dasar `indobenchmark/indobert-base-p2`, `max_length` 128, special token
 `[URL]`, `[MENTION]`, `[NUM]`.
 
-## Rencana kampanye lokal
+## Kalibrasi kampanye lokal (2026-09-02)
 
-**Hardware:** RTX 3050 Laptop, 4 GB VRAM (sekitar 3 GB bebas), 16 SM, 16 core CPU.
+**Hardware:** RTX 3050 Laptop, 4 GB VRAM, 16 SM, 16 core CPU.
 
-RM-a `batch=32` tidak muat di 3 GB, jadi dipakai `micro_batch=8` dengan akumulasi
-gradien. Ini ekuivalen secara matematis dengan batch besar untuk BERT (LayerNorm,
-bukan BatchNorm, dan loss dibagi jumlah akumulasi), sehingga merupakan kompromi
-memori dan bukan kompromi hasil. Perlu disebutkan di Bab 4.
+Satu run RM-a penuh dengan baseline kanonik (`lr=2e-5, epochs=5, batch=16,
+warmup=0,1, wd=0,01`) sudah dijalankan dan tercatat sebagai run #1 di
+`outputs/tuning/`, sehingga bukan sekadar uji coba melainkan sel pertama grid.
 
-Perkiraan biaya, diskalakan dari kampanye 3090:
+| Ukuran | Nilai |
+|---|---|
+| val F1-macro | 0,974873 |
+| val F1 judi | 0,958904 |
+| Epoch terbaik | 3 dari 5 |
+| Waktu latih | 1.101 s (18,4 menit) |
+| Peak GPU memory | 2.339 MB dari 4.096 MB |
+| micro_batch x akumulasi | 8 x 2 |
+| Trainable params | 109.485.314 |
 
-| Skenario | Run | Di 3090 | Perkiraan di 3050 |
-|---|---|---|---|
-| RM-a | 26 | 2.994 s | 4–6 jam |
-| RM-b | 31 | 379 s | sekitar 35 menit |
-| RM-c | 67 | 6 s | sekitar 1 menit |
+**Memori aman.** Sisa 1.757 MB pada `micro_batch=8`. Kampanye 3090 memakai
+`micro_batch=16` dengan puncak 2.309 MB, jadi 16 pun sebenarnya muat di kartu
+ini; menaikkannya akan memperbaiki utilisasi GPU dan memangkas total waktu.
 
-Langkah pertama kampanye adalah kalibrasi satu run RM-a untuk mengukur waktu dan
-memori sesungguhnya sebelum grid penuh dijalankan (sel pertama notebook 04).
+**Biaya sebenarnya jauh di atas perkiraan awal.** Estimasi 5x perlambatan
+berdasarkan rasio SM dan bandwidth ternyata keliru: pengukuran memberi **7,7x**
+untuk konfigurasi yang sama (143,2 s di 3090 versus 1.101 s di 3050). Proyeksi
+yang berlaku:
 
-## Yang akan berubah pada angka Bab 4
+| Skenario | Run | Perkiraan di 3050 |
+|---|---|---|
+| RM-a | 26 | sekitar 8 jam |
+| RM-b | 31 | sekitar 30-45 menit |
+| RM-c | 67 | beberapa menit |
 
-F1 tidak akan sama persis dengan hasil 3090: beda arsitektur GPU berarti beda
-pemilihan kernel cuDNN dan beda urutan reduksi floating point, yang terakumulasi
-selama lima epoch; ditambah transformers 5.12 versus 4.38. Perkirakan pergeseran
-sekitar 0,1–0,5 pp, dan konfigurasi pemenang bisa berbeda. Narasi seperti "MLP
-mengungguli linear" harus diperiksa ulang terhadap angka baru, bukan disalin.
+Kampanye RM-a perlu dijalankan semalam, bukan beberapa jam.
 
-Temuan yang diperkirakan bertahan karena bersifat arsitektural, bukan efek
-hardware:
+### Perbandingan dengan run berkonfigurasi sama di RTX 3090
 
-- Rasio waktu latih RM-a berbanding RM-b justru melebar di GPU yang lebih lemah,
-  karena RM-b melatih head di atas fitur yang sudah dihitung.
-- Latency inferensi RM-a, RM-b, dan RM-c berdekatan. Smoke run di RTX 3050
-  memberi 73,1 / 71,2 / 73,0 ms per sampel — pola yang sama dengan 9,40 / 9,08 /
-  10,96 ms di RTX 3090. Ketiganya menjalankan forward pass encoder 110 juta
-  parameter yang sama, sehingga efisiensi RM-b dan RM-c ada pada parameter dan
-  waktu LATIH, bukan pada kecepatan prediksi.
+| | RTX 3090 (arsip) | RTX 3050 (lokal) |
+|---|---|---|
+| val F1-macro | 0,974873 | 0,974873 |
+| val F1 judi | 0,958904 | 0,958904 |
+| val accuracy | 0,985021 | 0,985021 |
+| Epoch terbaik | 5 | 3 |
+| Waktu latih | 143,2 s | 1.101,0 s |
+| micro_batch x akumulasi | 16 x 1 | 8 x 2 |
+
+Metrik puncaknya sama sampai enam desimal, tetapi ini **bukan** reproduksi
+bit-identical: kurva per-epoch keduanya berbeda (mis. epoch 1 memberi F1-macro
+0,9584 versus 0,9398), dan nilai terbaik itu kebetulan dicapai pada epoch yang
+berbeda. Yang terjadi adalah kedua model, pada epoch terbaiknya masing-masing,
+menghasilkan confusion matrix yang persis sama atas 1.402 sampel validation.
+
+Implikasinya untuk Bab 4: pergeseran F1 antar hardware ternyata jauh lebih kecil
+daripada dugaan awal (0,1-0,5 pp), tetapi konfigurasi pemenang tetap harus
+ditentukan ulang dari kampanye lokal, bukan disalin dari arsip.
 
 ## Langkah berikutnya
 
-1. Jalankan `04_tuning_campaign.ipynb` (mulai dari sel kalibrasi).
+1. Lanjutkan `04_tuning_campaign.ipynb` dari run #2 (run #1 sudah ada).
+   Pertimbangkan menaikkan `MICRO_BATCH` ke 16 di `.env` untuk memangkas waktu.
 2. Jalankan `05_final_benchmark.ipynb` satu kali setelah ketiga skenario punya run.
 3. Jalankan `06_analysis_export.ipynb` untuk biaya FAISS dan `HASIL.xlsx`.
 4. Tulis Bab 4 dari angka di `outputs/tuning/`.
