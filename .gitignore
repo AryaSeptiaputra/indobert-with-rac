@@ -1,66 +1,97 @@
-# Python
+# ---------------------------------------------------------------------------
+# Artefak Python
+# ---------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 build/
 dist/
 *.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
 
+# ---------------------------------------------------------------------------
 # Virtual environment
-venv/
+# ---------------------------------------------------------------------------
 .venv/
+venv/
 env/
 
+# ---------------------------------------------------------------------------
 # Jupyter
+# ---------------------------------------------------------------------------
 .ipynb_checkpoints/
 
-# Dataset mentah & hasil preprocessing
-# alasan: regenerable dari raw + script preprocessing, dan berisi data personal (username YouTube)
+# ---------------------------------------------------------------------------
+# Data
+# Dataset komentar YouTube memuat kolom identitas (author, authorChannelId).
+# Lihat DATASET.md untuk keputusan distribusinya.
+# ---------------------------------------------------------------------------
 data/raw/*
+data/interim/*
 data/processed/*
-!data/raw/.gitkeep
-!data/processed/.gitkeep
+!data/**/.gitkeep
 
-# Checkpoint model & index FAISS — besar, hasil training di Vast.ai
-checkpoints/
+# ---------------------------------------------------------------------------
+# Keluaran eksperimen
+# Seluruh isi outputs/ bisa dihasilkan ulang oleh notebook, KECUALI berkas
+# ringkas yang dikutip langsung di Bab 4 -- itu di-whitelist di bawah.
+# ---------------------------------------------------------------------------
+outputs/*
+!outputs/*/
+
+# Arsip kampanye Vast.ai: disimpan di disk sebagai jalan mundur sampai kampanye
+# lokal terbukti berhasil, lalu dihapus. Tidak pernah masuk git (folder aslinya
+# results/vast/ juga tidak).
+outputs/_archive_*/
+
+outputs/**/features/
+outputs/**/checkpoints/
+outputs/**/*.npy
+outputs/**/*.pt
+outputs/**/job.log
+outputs/**/job.pid
+
+!outputs/_migration_checksums.json
+!outputs/**/runs_*.csv
+!outputs/**/best.json
+!outputs/**/hardware.json
+!outputs/**/tuning_summary.json
+!outputs/**/metrics/*.csv
+!outputs/**/history/*.csv
+!outputs/**/README.md
+!outputs/figures/eda/*.png
+
+# ---------------------------------------------------------------------------
+# Bobot model
+# ---------------------------------------------------------------------------
+models/*
+!models/.gitkeep
 *.bin
 *.safetensors
-*.pt
 *.faiss
 *.index
 
-# Log training
-runs/
-logs/
-wandb/
+# ---------------------------------------------------------------------------
+# Berkas turunan yang bisa diregenerasi
+# ---------------------------------------------------------------------------
+HASIL.xlsx
+*.zip
 
-# Hasil tuning Vast.ai — regenerable dari re-run kampanye, backup lewat report_bundle.zip
-# (tab Hasil app.py); menumpuk terus tiap sesi, tak perlu ikut versi kontrol.
-results/vast/
-# out_dir eksperimen ad-hoc (mis. results/vast_rmc_cheap_head/, results/vast_candidate2/)
-# -- sama alasannya: regenerable, biner besar, bukan hasil resmi Bab 4.
-results/vast_*/
-
-# Cache embedding beku RM-b/RM-c — regenerable dari model+data (28MB biner, sama alasan
-# dengan checkpoints/*.pt di atas).
-results/features/
-
-# results_c2/ — hasil unduhan Vast.ai (kandidat #2), diekstrak di root repo. Checkpoint
-# .pt sudah ke-ignore lewat pola global di atas; baris ini menambah embedding .npy dan
-# figur .png (regenerable, biner besar) supaya hanya CSV/JSON kecil yang ikut versi
-# kontrol (lihat results_c2/final_comparison_all_candidates.csv).
-results_c2/**/features/
-results_c2/**/figures/
-results_c2/figures/
-
-# Kredensial (kalau nanti nyimpen API key Vast.ai / GitHub token)
+# ---------------------------------------------------------------------------
+# Rahasia
+# ---------------------------------------------------------------------------
 .env
 *.pem
 
-# OS / editor
+# ---------------------------------------------------------------------------
+# OS dan editor
+# ---------------------------------------------------------------------------
 .DS_Store
 .vscode/
 .idea/
 
-# Claude Stuff
-./claude
-CLAUDE.MD
+# ---------------------------------------------------------------------------
+# Claude Code
+# ---------------------------------------------------------------------------
+.claude/
