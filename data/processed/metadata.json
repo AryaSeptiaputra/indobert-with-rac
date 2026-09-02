@@ -1,5 +1,5 @@
 {
-  "source": "..\\dataset\\raw\\data_labeling.csv",
+  "source": "data/raw/data_labeling.csv",
   "random_seed": 42,
   "counts": {
     "raw": 14237,
@@ -65,5 +65,5 @@
     ],
     "lowercase_manual": false
   },
-  "notes": "Index FAISS RM-c HANYA dari train set. Model wajib resize_token_embeddings(len(tokenizer))."
+  "notes": "Indeks FAISS RM-c HANYA dari split train. Model wajib resize_token_embeddings(len(tokenizer))."
 }

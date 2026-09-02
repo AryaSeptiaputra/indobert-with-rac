@@ -30,6 +30,7 @@ from src.config import (
     LABEL_COLUMN,
     MENTION_PLACEHOLDER,
     NUM_PLACEHOLDER,
+    PROJECT_ROOT,
     RAW_TEXT_COLUMN,
     SPLIT_NAMES,
     TEXT_COLUMN,
@@ -480,7 +481,7 @@ class DatasetBuilder:
             }
 
         return {
-            "source": str(source) if source else None,
+            "source": self._relative_source(source),
             "random_seed": self.seed,
             "counts": self.counts,
             "label_conflict": self.label_conflict,
@@ -515,3 +516,13 @@ class DatasetBuilder:
                 "Model wajib resize_token_embeddings(len(tokenizer))."
             ),
         }
+
+    @staticmethod
+    def _relative_source(source: Path | None) -> str | None:
+        """Path sumber relatif terhadap root repo, agar metadata tetap portabel."""
+        if source is None:
+            return None
+        try:
+            return str(Path(source).resolve().relative_to(PROJECT_ROOT)).replace("\\", "/")
+        except ValueError:
+            return str(source)
