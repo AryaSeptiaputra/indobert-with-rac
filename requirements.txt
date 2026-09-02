@@ -1,31 +1,30 @@
-# IndoBERT-with-RAC — dependensi Python
+# IndoBERT-with-RAC - dependensi produksi
 # Instalasi: pip install -r requirements.txt
 #
-# Catatan GPU: faiss-cpu adalah default untuk kerja lokal (EDA/preprocessing).
-# Untuk fase training di Vast.ai (GPU), ganti ke: faiss-gpu==1.7.2
-# dan gunakan image pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime.
+# Torch di-pin tanpa suffix build. Untuk GPU, pasang lebih dulu dari index CUDA
+# yang sesuai, mis. CUDA 13.0:
+#   pip install torch==2.12.1 --index-url https://download.pytorch.org/whl/cu130
+# Versi di bawah adalah yang benar-benar terpasang dan tervalidasi di Python 3.13.
 
-torch==2.1.0
-transformers==4.38.0
-datasets==2.18.0
-sentencepiece              # transformers butuh ini utk *mengenali* kelas AlbertTokenizer,
-                           # walau load_tokenizer() akhirnya fallback ke BertTokenizer utk
-                           # indobert-lite-* (repo Hub-nya cuma punya vocab.txt WordPiece,
-                           # bukan .model SentencePiece asli -- lihat src/dataset.py)
-faiss-cpu==1.7.4          # ganti faiss-gpu==1.7.2 bila ada GPU (Vast.ai)
-scikit-learn==1.4.0
-pandas==2.2.0
-numpy==1.26.4
-openpyxl==3.1.2
-matplotlib==3.8.0
+torch==2.12.1
+transformers==5.12.1
+sentencepiece==0.2.2       # dibutuhkan transformers untuk mengenali kelas AlbertTokenizer
+                           # sebelum fallback WordPiece berjalan (lihat comment_dataset.py)
+
+faiss-cpu==1.14.3          # retrieval RM-c; indeks flat/exact, CPU sudah memadai
+scikit-learn==1.8.0
+pandas==2.3.3
+numpy==2.4.0
+
+pydantic==2.13.5
+pydantic-settings==2.15.0
+python-json-logger==4.2.0
+
+matplotlib==3.10.8
 seaborn==0.13.2
-tqdm==4.66.0
-langdetect==1.0.9         # deteksi bahasa (EDA Bagian 1)
+openpyxl==3.1.5
+tqdm==4.68.3
+psutil==7.2.2              # pengukuran memori proses pada benchmark FAISS
+langdetect==1.0.9          # deteksi bahasa (EDA)
 
-# Tuning Control Panel (app.py) — dijalankan di instance Vast.ai
-streamlit>=1.30
-
-# Menjalankan notebook (.ipynb) di lingkungan headless
-nbclient==0.11.0
-nbformat==5.10.4
-ipykernel
+streamlit==1.59.2          # control panel app.py
