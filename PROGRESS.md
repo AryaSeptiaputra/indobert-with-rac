@@ -10,17 +10,19 @@ strategi adaptasi IndoBERT untuk deteksi komentar judi). Terakhir diperbarui: **
 | EDA | Selesai | `docs/EDA_REPORT_BAGIAN1/2/3.md`, `outputs/figures/eda/` |
 | Preprocessing | Selesai | `data/processed/`, `DATASET.md` |
 | Penulisan ulang kode ke standar `writer-code` | Selesai | `src/`, `tests/`, `notebooks/` |
-| Kampanye tuning lokal (RTX 3050) | **Berjalan** (RM-a 1 dari 26 run) | `outputs/tuning/` |
-| Benchmark final lokal (TEST, satu sesi) | **Belum dijalankan** | target `outputs/tuning/metrics/` |
+| Kampanye tuning lokal (RTX 3050) | Selesai (RM-a 30, RM-b 27, RM-c 67 run) | `outputs/tuning/` |
+| Benchmark final lokal (TEST, satu sesi) | Selesai | `outputs/tuning/metrics/` |
 | Penulisan Bab 4 | Belum | menunggu angka lokal |
 
 ## Keadaan sekarang
 
 Kode telah ditulis ulang sepenuhnya (branch `rewrite/writer-code-standard`) dan
 seluruh training dipindahkan dari Vast.ai ke mesin lokal. Kampanye lama di RTX
-3090 **tidak lagi dipakai untuk Bab 4**; hasilnya disimpan di
-`outputs/_archive_vast*/` sebagai jalan mundur sampai kampanye lokal terbukti
-berhasil, lalu akan dihapus.
+3090 **tidak lagi dipakai untuk Bab 4**. Kampanye lokal (RTX 3050) sudah selesai
+dan terverifikasi bebas cacat (2026-09-05): RM-a 30 run, RM-b 27 run, RM-c 67
+run, tanpa error/NaN/duplikat, kriteria sukses RM-b dan RM-c 3/3 terpenuhi.
+`outputs/_archive_vast*/` dan `outputs/combined/` (turunan arsip) sudah
+dihapus.
 
 Yang sudah terverifikasi:
 
@@ -118,12 +120,8 @@ ditentukan ulang dari kampanye lokal, bukan disalin dari arsip.
 
 ## Langkah berikutnya
 
-1. Lanjutkan `04_tuning_campaign.ipynb` dari run #2 (run #1 sudah ada).
-   Pertimbangkan menaikkan `MICRO_BATCH` ke 16 di `.env` untuk memangkas waktu.
-2. Jalankan `05_final_benchmark.ipynb` satu kali setelah ketiga skenario punya run.
-3. Jalankan `06_analysis_export.ipynb` untuk biaya FAISS dan `HASIL.xlsx`.
-4. Tulis Bab 4 dari angka di `outputs/tuning/`.
-5. Setelah Bab 4 selesai, hapus `outputs/_archive_vast*/`.
+1. Tulis Bab 4 dari angka di `outputs/tuning/` (`final_comparison.csv`,
+   `success_criteria.csv`, `tuning_summary.json`).
 
 ## Aturan validitas Bab 4
 
