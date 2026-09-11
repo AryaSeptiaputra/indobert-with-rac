@@ -1,0 +1,4 @@
+scenario,infer_latency_ms,infer_peak_gpu_mem_mb
+RM-a,23.1917,119.0
+RM-b,30.8627,107.8
+RM-c,35.0917,107.8

@@ -1,0 +1,4 @@
+model,config,test_f1_macro,test_acc,test_f1_judi,test_precision_judi,test_recall_judi,val_f1_macro,trainable_params,train_time_s,infer_latency_ms,infer_peak_gpu_mem_mb
+RM-a,"{""lr"": 1e-05, ""epochs"": 5, ""batch"": 32, ""warmup_ratio"": 0.1, ""weight_decay"": 0.01, ""micro_batch"": 32, ""seed"": 42}",0.956149,0.973665,0.928433,0.91954,0.9375,0.973636,11685378,459.97,23.1917,119.0
+RM-b,"{""head_arch"": ""mlp"", ""hidden_dim"": 1024, ""epochs"": 30, ""lr"": 0.0001, ""dropout"": 0.1, ""weight_decay"": 0.01, ""batch"": 32, ""seed"": 42}",0.939364,0.962989,0.901515,0.875,0.929688,0.968843,789506,75.89,30.8627,107.8
+RM-c,"{""alpha"": 0.2, ""k"": 3, ""weighting"": ""similarity""}",0.944628,0.966548,0.909789,0.89434,0.925781,0.971151,0,0.0,35.0917,107.8

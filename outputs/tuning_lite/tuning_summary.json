@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-09-10 17:20:16",
+  "scenarios": {
+    "rma": {
+      "n_runs": 28,
+      "first_run_at": "2026-09-07 20:44:17",
+      "last_run_at": "2026-09-08 13:10:18",
+      "n_batches": 2,
+      "best_run_id": 17,
+      "best_val_f1_macro": 0.9736362548506761
+    },
+    "rmb": {
+      "n_runs": 27,
+      "first_run_at": "2026-09-08 01:07:55",
+      "last_run_at": "2026-09-08 01:14:05",
+      "n_batches": 4,
+      "best_run_id": 10,
+      "best_val_f1_macro": 0.968842846641708
+    },
+    "rmc": {
+      "n_runs": 67,
+      "first_run_at": "2026-09-08 01:19:59",
+      "last_run_at": "2026-09-08 01:20:18",
+      "n_batches": 2,
+      "best_run_id": 14,
+      "best_val_f1_macro": 0.9711514719196686
+    }
+  }
+}

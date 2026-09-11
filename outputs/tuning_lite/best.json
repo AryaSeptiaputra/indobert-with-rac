@@ -1,0 +1,50 @@
+{
+  "rma": {
+    "run_id": 17,
+    "config": {
+      "lr": 1e-05,
+      "epochs": 5,
+      "batch": 32,
+      "warmup_ratio": 0.1,
+      "weight_decay": 0.01,
+      "micro_batch": 32,
+      "seed": 42
+    },
+    "val_f1_macro": 0.9736362548506761,
+    "train_time_s": 459.97,
+    "trainable_params": 11685378,
+    "peak_mem_mb": 1665.8,
+    "model_name": "indobenchmark/indobert-lite-base-p2"
+  },
+  "rmb": {
+    "run_id": 10,
+    "config": {
+      "head_arch": "mlp",
+      "hidden_dim": 1024,
+      "epochs": 30,
+      "lr": 0.0001,
+      "dropout": 0.1,
+      "weight_decay": 0.01,
+      "batch": 32,
+      "seed": 42
+    },
+    "val_f1_macro": 0.968842846641708,
+    "train_time_s": 75.89,
+    "trainable_params": 789506,
+    "peak_mem_mb": 63.5,
+    "infer_latency_ms": 0.308,
+    "model_name": "indobenchmark/indobert-lite-base-p2"
+  },
+  "rmc": {
+    "run_id": 14,
+    "config": {
+      "alpha": 0.2,
+      "k": 3,
+      "weighting": "similarity"
+    },
+    "val_f1_macro": 0.9711514719196686,
+    "train_time_s": 0.0,
+    "trainable_params": 0,
+    "model_name": "indobenchmark/indobert-lite-base-p2"
+  }
+}
