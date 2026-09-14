@@ -1,12 +1,12 @@
 # RM-a — Rancangan Eksplorasi Hyperparameter (26 run)
 
-Dokumen kerja untuk tuning RM-a (full fine-tuning IndoBERT) di tab **Tuning** pada `app.py`.
+Dokumen kerja untuk tuning RM-a (full fine-tuning IndoBERT) lewat `04_tuning_campaign.ipynb`.
 Isi kolom **Alasan** langsung dapat disalin ke field `catatan` di UI.
 
 > **`RMA_TUNING_GRID.csv`** (folder ini, `tuning_grids/`) adalah transkripsi mesin-terbaca dari ke-24 baris
 > Tahap 1 di bawah (kolom `lr,epochs,batch,warmup_ratio,weight_decay,micro_batch,catatan`).
-> Unggah langsung lewat mode **Batch → Tempel/unggah tabel CSV** di tab Tuning `app.py`
-> untuk menjalankan seluruh Tahap 1 dalam satu aksi — lihat `VAST_GUIDE.md` §4 "Mode Batch".
+> Unggah langsung lewat `runner.run_batch()` di `04_tuning_campaign.ipynb` untuk menjalankan
+> seluruh Tahap 1 dalam satu panggilan.
 > Tabel markdown di bawah ini tetap jadi **sumber kebenaran**; jika tabel berubah, salin
 > ulang manual ke CSV. Tahap 2 (2 baris coordinate-descent) SENGAJA tidak ada di CSV karena
 > bergantung pada sel pemenang Tahap 1 — isi manual lewat tombol "Isi dari config terbaik
@@ -16,7 +16,7 @@ Isi kolom **Alasan** langsung dapat disalin ke field `catatan` di UI.
 
 ## Metode: hibrida (grid + coordinate descent)
 
-Partisi axis diturunkan dari mekanisme nyata di `src/tuning.py:108-114`, bukan asumsi:
+Partisi axis diturunkan dari mekanisme nyata di `src/services/training.py:108-114`, bukan asumsi:
 
 ```python
 steps = ceil(len(tr)/accum) * epochs          # = ceil(N/batch) × epochs
@@ -35,7 +35,7 @@ Grid 5-axis penuh (96 run, ~7 jam) **ditolak**: memakan hampir seluruh budget $2
 menaikkan risiko *overfitting ke validation set* (~1.400 sampel — makin banyak konfigurasi
 dibandingkan, makin besar peluang pemenang menang karena keberuntungan).
 
-**Ukuran train:** N = 6.588 (`dataset/processed/metadata.json`) →
+**Ukuran train:** N = 6.588 (`data/processed/metadata.json`) →
 `ceil(6588/16) = 412` step/epoch · `ceil(6588/32) = 206` step/epoch.
 
 ---
@@ -126,7 +126,7 @@ Isi `[Peran sel]` dari kolom **Alasan** di tabel. Contoh:
 di RTX 3090 — menyisakan anggaran cukup untuk RM-b, RM-c, dan tab Final.
 
 Jalankan **1× Mode SMOKE** sebelum run penuh untuk memastikan pipeline menulis baris ke
-`results/vast/runs_rma.csv` tanpa error.
+`outputs/tuning/runs_rma.csv` tanpa error.
 
 ---
 
@@ -141,4 +141,4 @@ Jalankan **1× Mode SMOKE** sebelum run penuh untuk memastikan pipeline menulis 
 
 Prior-work tugas identik (deteksi judi Indonesia) yang relevan untuk pembanding HP:
 Kamdan dkk. (2025), Manullang dkk. (2025, JAIC), Amin dkk. (2024) — daftar lengkap di
-`DAFTAR_REFERENSI.pdf`.
+`docs/DAFTAR_REFERENSI.pdf`.

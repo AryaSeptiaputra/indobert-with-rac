@@ -1,100 +1,129 @@
 # PROGRESS — IndoBERT-with-RAC
 
-Status keseluruhan proyek (skripsi ITENAS 2026: trade-off performa vs efisiensi 3 strategi adaptasi IndoBERT untuk deteksi komentar judi). Terakhir diperbarui: **2026-07-25**.
+Status proyek skripsi ITENAS 2026 (trade-off performa versus efisiensi tiga
+strategi adaptasi IndoBERT untuk deteksi komentar judi). Terakhir diperbarui: **2026-09-02**.
 
 ## Ringkasan tahap
 
 | Tahap | Status | Artefak |
 |-------|--------|---------|
-| EDA (`01_eda.ipynb`) | ✅ Selesai | `EDA_REPORT_BAGIAN1/2/3.md`, `results/figures/` |
-| Preprocessing (`02_preprocessing.ipynb`) | ✅ Selesai | `dataset/splits/`, `dataset/processed/metadata.json`, `DATASET.md` |
-| Sistem tuning UI (Vast.ai) | ✅ Selesai dibangun & dipakai | `app.py`, `src/job_runner.py`, `src/tuning.py`, `src/reporting.py`, `VAST_GUIDE.md` |
-| **Tuning RM-a** | ✅ **Selesai** (26 run: grid 24 + coordinate descent 2) | `tuning_grids/RMA_TUNING_GRID.md` + 2 CSV tahap |
-| **Tuning RM-b** | ✅ **Selesai** (27 run: arsitektur 4+2 + grid lr×epochs 15 + coordinate descent 6) | `tuning_grids/RMB_TUNING_GRID.md` + 4 CSV tahap |
-| **Tuning RM-c** | ✅ **Selesai** (67 run: grid α×k 66 + cek weighting 1) | `tuning_grids/RMC_TUNING_GRID.md` + 2 CSV tahap |
-| **Benchmark Final (TEST, satu sesi GPU)** | ✅ **Selesai** | `results/vast/metrics/{final_comparison,inference_benchmark,success_criteria}.csv` |
+| EDA | Selesai | `docs/EDA_REPORT_BAGIAN1/2/3.md`, `outputs/figures/eda/` |
+| Preprocessing | Selesai | `data/processed/`, `DATASET.md` |
+| Penulisan ulang kode ke standar `writer-code` | Selesai | `src/`, `tests/`, `notebooks/` |
+| Kampanye tuning lokal (RTX 3050) | Selesai (RM-a 30, RM-b 27, RM-c 67 run) | `outputs/tuning/` |
+| Benchmark final lokal (TEST, satu sesi) | Selesai | `outputs/tuning/metrics/` |
+| Penulisan Bab 4 | Belum | menunggu angka lokal |
 
-Seluruh rangkaian tuning + benchmark final **tuntas**. Sisa pekerjaan: penulisan Bab 4 skripsi
-dan (opsional) tuning RM-c lanjutan bila ingin eksplorasi lebih jauh.
+## Keadaan sekarang
 
-## Dataset final (input siap latih)
-- `dataset/splits/{train,val,test}.csv` — kolom `textOriginal, text_clean, label`. **Input model = `text_clean`**.
-- train 6.588 / val 1.402 / test 1.405 (total 9.395; ~18% kelas judi). Rasio ~4,5:1.
-- Class weights (dari train): `{0: 0.611, 1: 2.752}`. Metrik utama **F1-macro**.
-- Base model `indobenchmark/indobert-base-p2`, max_length 128, special token `[URL]/[MENTION]/[NUM]` → **model wajib `resize_token_embeddings`**.
+Kode telah ditulis ulang sepenuhnya (branch `rewrite/writer-code-standard`) dan
+seluruh training dipindahkan dari Vast.ai ke mesin lokal. Kampanye lama di RTX
+3090 **tidak lagi dipakai untuk Bab 4**. Kampanye lokal (RTX 3050) sudah selesai
+dan terverifikasi bebas cacat (2026-09-05): RM-a 30 run, RM-b 27 run, RM-c 67
+run, tanpa error/NaN/duplikat, kriteria sukses RM-b dan RM-c 3/3 terpenuhi.
+`outputs/_archive_vast*/` dan `outputs/combined/` (turunan arsip) sudah
+dihapus.
 
-## Hasil final 3 skenario (TEST set, satu sesi RTX 3090 — resmi untuk Bab 4)
+Yang sudah terverifikasi:
 
-| Model | Config final | F1-macro | F1 judi | Precision judi | Trainable params | Waktu latih | Latency inferensi |
-|-------|------|----------|---------|----------------|------------------|-------------|---|
-| RM-a (full fine-tune) | `lr=2e-5, epochs=5, batch=32, warmup=0,1, wd=0,01` | 0,9607 | 0,9357 | 0,9339 | 109.485.314 | 81,1 s | 9,40 ms |
-| RM-b (frozen + MLP head) | `hidden_dim=1024, lr=1e-3, epochs=10, dropout=0,1, wd=0,0, batch=32` | 0,9486 | 0,9159 | 0,9176 | 789.506 (0,72%) | 11,65 s | 9,08 ms |
-| RM-c (RAC) | `alpha=0,2, k=5, weighting=similarity` (head = RM-b di atas) | 0,9497 | 0,9176 | 0,9213 | 0 | 0,0 s | 10,96 ms |
+- Split `train/val/test` dan `data_clean.csv` yang dihasilkan kode baru
+  **byte-identical** dengan yang dipakai seluruh eksperimen sebelumnya, dan
+  seluruh field `metadata.json` sama persis (14.237 → 14.227 → 9.412 → 17 bocor
+  dibuang → 9.395).
+- `RACClassifier` menghasilkan prediksi identik dengan implementasi lama pada 30
+  kombinasi alpha/k/weighting.
+- `RMBTrainer` dan `RMCEvaluator` identik dengan implementasi lama, termasuk
+  seluruh kurva `train_loss` per epoch.
+- RM-a memuat **109.485.314** trainable parameter dan `MLPHead(768, 1024)`
+  memuat **789.506**, keduanya cocok dengan angka yang dikutip sebelumnya.
+- Smoke run ujung ke ujung di RTX 3050 (subset kecil): RM-a → RM-b → RM-c →
+  benchmark final berjalan dan menghasilkan 19 figur, 3 tabel metrik, dan 3
+  checkpoint.
+- `pytest`: 243 test lulus, sekitar 50 detik, tanpa GPU.
 
-**RM-b dan RM-c lolos 3/3 kriteria sukses** (gap F1 ≤3pp, reduksi param ≥90%, reduksi waktu ≥50% — syarat cuma 2/3): RM-b gap 1,21pp/reduksi param 99,28%/reduksi waktu 85,64%; RM-c gap 1,10pp/reduksi param 100%/reduksi waktu 100%.
+## Dataset
 
-**Temuan kunci:**
-- RM-b: arsitektur **MLP jauh mengungguli linear** (dikonfirmasi ulang dari nol, bukan asumsi hasil lama), kapasitas optimal `hidden_dim=1024` (di atas dimensi input 768 — keputusan disengaja setelah tren kenaikan belum melandai sampai titik itu, dihentikan saat sinyal overfit pertama muncul).
-- RM-c: RAC memberi perbaikan **kecil tapi konsisten arahnya** di atas RM-b murni (+0,11pp F1-macro test) — seluruhnya berasal dari perbaikan precision (mengurangi 1 false positive dari 1.405 sampel test), recall tak berubah sama sekali. Signifikansi statistik formal belum diuji (satu seed/split) — baca sebagai bonus tanpa risiko, bukan pendorong utama argumen kompetitif.
-- **Latency inferensi RM-b/RM-c HAMPIR SAMA dengan RM-a** (bahkan RM-c sedikit lebih lambat) — efisiensi RM-b/RM-c ada di parameter & waktu **latih**, bukan kecepatan prediksi (forward pass encoder BERT 110M tetap penuh dijalankan di ketiganya saat inferensi).
+`data/processed/{train,val,test}.csv` dengan kolom `textOriginal`, `text_clean`,
+`label`. **Input model adalah `text_clean`.**
 
-## Eksplorasi encoder ringan (IndoBERT-lite) untuk RM-b/RM-c — infrastruktur siap, hasil awal
+train 6.588 / val 1.402 / test 1.405 (total 9.395, sekitar 18% kelas judi, rasio
+4,5:1). Class weight dari train `{0: 0.611, 1: 2.752}`. Metrik utama F1-macro.
 
-Motivasi: latency inferensi RM-b/RM-c hampir tidak membaik dibanding RM-a (lihat temuan kunci di
-atas) karena encoder BERT-base 110M tetap dijalankan penuh saat inferensi. Untuk menyerang ini,
-ditambahkan dukungan **ganti encoder** RM-b/RM-c ke varian yang lebih ringan:
+Model dasar `indobenchmark/indobert-base-p2`, `max_length` 128, special token
+`[URL]`, `[MENTION]`, `[NUM]`.
 
-- **Infrastruktur** (siap dipakai): `app.py` sidebar punya selectbox "Base encoder"
-  (`indobert-base-p2` default vs `indobert-lite-base-p2`); `src/job_runner.py` menamai cache fitur
-  per-model (`features/<model_slug>/`, `extract_meta.json` kini mencatat `model_name`+`hidden_dim`);
-  `rmb_best.pt` mencatat `model_name` asalnya; RM-c menolak (raise error) jika `model_name` job
-  beda dari encoder head RM-b yang dipakai (cegah kontaminasi silang). Kolom `model_name` kini ada
-  di `runs_{rma,rmb,rmc}.csv`. Semua perubahan aditif & backward-compatible (checkpoint lama tanpa
-  key ini tetap bisa dimuat, hanya validasi mismatch di-skip dengan aman).
-- **Bug penting yang ditemukan & diperbaiki** (`src/dataset.py::load_tokenizer`): repo Hub
-  `indobenchmark/indobert-lite-*` berarsitektur ALBERT tapi **hanya menyediakan vocab.txt
-  WordPiece**, bukan file `.model` SentencePiece. `AutoTokenizer` salah menebak kelas
-  (`AlbertTokenizer`, butuh SentencePiece) dan **diam-diam** jatuh ke vocab minimal 5-token (semua
-  kata jadi `[UNK]`) — bukan error, sehingga bisa lolos tanpa disadari dan mencemari seluruh
-  training/evaluasi. Diperbaiki dengan deteksi otomatis (`len(tokenizer) < 1000` → fallback ke
-  `BertTokenizer`) + `sentencepiece` ditambahkan ke `requirements.txt` (tetap dibutuhkan agar
-  `transformers` bisa mengenali kelas `AlbertTokenizer` sebelum fallback berjalan).
-- **Validasi SMOKE (lokal, RTX 3050 Laptop, subset kecil, BUKAN angka final):** tokenizer (dengan
-  fix di atas), `resize_token_embeddings`+seeding token khusus, ekstraksi fitur, training head RM-b,
-  RAC RM-c, dan guard mismatch — **semua lolos** memakai `indobenchmark/indobert-lite-base-p2`.
-- **Temuan awal (perbandingan latency satu-sesi/satu-GPU, encoder saja, sample tunggal):**
-  encoder lite (ALBERT, 11,68 juta parameter) **TIDAK mempercepat forward pass** dibanding
-  base-p2 (109,48 juta parameter) — 21,78 ms vs 21,41 ms (lite sedikit LEBIH LAMBAT). Yang turun
-  drastis justru **peak GPU memory** (59,6 MB vs 433,4 MB, ~86% lebih kecil). Ini konsisten dengan
-  arsitektur ALBERT (Lan et al., 2019): parameter berkurang lewat *cross-layer weight sharing*,
-  bukan lewat pengurangan jumlah layer atau ukuran hidden — jumlah komputasi (FLOPs) per forward
-  pass nyaris sama dengan BERT-base, jadi latency tidak ikut turun proporsional dengan parameter.
-  **Implikasi:** `indobert-lite-base-p2` kemungkinan BUKAN jawaban untuk masalah latency RM-b/RM-c;
-  ia menambah argumen efisiensi *memori*, bukan *kecepatan*. Untuk benar-benar mengejar latency,
-  perlu varian dengan **lebih sedikit layer transformer** (mis. model ter-distilasi), bukan
-  ALBERT-style parameter sharing.
-- **Belum dilakukan** (di luar lingkup validasi ini, perlu keputusan berikutnya): kampanye tuning
-  sungguhan dengan encoder lite (grid RM-b baru + turunan RM-c) di `out_dir` terpisah (mis.
-  `results/vast_lite/`) di Vast.ai untuk angka F1/efisiensi yang valid Bab 4 — SMOKE run lokal di
-  atas sudah dibersihkan (bukan artefak permanen).
+## Kalibrasi kampanye lokal (2026-09-02)
 
-## Sistem tuning UI — cara kerja
+**Hardware:** RTX 3050 Laptop, 4 GB VRAM, 16 SM, 16 core CPU.
 
-Dibangun untuk dijalankan di **Vast.ai** (GPU sewa) dengan alur **human-in-the-loop**, plus mode **Batch** (tambahan, aditif — single-config tetap ada) untuk menjalankan banyak konfigurasi sekaligus dari grid nilai (Cartesian) atau tabel CSV siap-pakai:
+Satu run RM-a penuh dengan baseline kanonik (`lr=2e-5, epochs=5, batch=16,
+warmup=0,1, wd=0,01`) sudah dijalankan dan tercatat sebagai run #1 di
+`outputs/tuning/`, sehingga bukan sekadar uji coba melainkan sel pertama grid.
 
-- **`app.py`** — Streamlit Control Panel (4 tab: Status / Tuning / Final / Hasil). Setiap run (single atau batch) menumpuk di `runs_{rma,rmb,rmc}.csv` + kolom `catatan`, `delta_vs_best_f1_macro_pp`, `is_tie_with_best`, `overfit_signal` (semua otomatis); `best.json` melacak juara-sejauh-ini; RM-c otomatis pakai head RM-b terbaik; tab Final = benchmark inferensi satu sesi + verdict kriteria.
-- **`src/job_runner.py`** — worker (proses terpisah, tetap jalan walau tab ditutup). `run_batch()` menjalankan banyak config berurutan, isolasi kegagalan per-config (`runs_{scenario}_errors.csv`), stop graceful.
-- **`src/tuning.py`** — engine training/eval per-config (`train_eval_rma/rmb`, `eval_rmc`).
-- **`src/reporting.py`** — artefak visual otomatis: kurva training per-run, confusion matrix + PR curve (juara & final), heatmap grid, scatter trade-off performa-vs-efisiensi, bar chart top-config.
-- Panduan operasional lengkap: **`VAST_GUIDE.md`**. Rancangan tuning per skenario:
-  folder **`tuning_grids/`** (`RMA_TUNING_GRID.md`, `RMB_TUNING_GRID.md`, `RMC_TUNING_GRID.md`
-  + CSV per tahap siap unggah).
+| Ukuran | Nilai |
+|---|---|
+| val F1-macro | 0,974873 |
+| val F1 judi | 0,958904 |
+| Epoch terbaik | 3 dari 5 |
+| Waktu latih | 1.101 s (18,4 menit) |
+| Peak GPU memory | 2.339 MB dari 4.096 MB |
+| micro_batch x akumulasi | 8 x 2 |
+| Trainable params | 109.485.314 |
 
-## Aturan validitas untuk Bab 4
-- Angka **efisiensi** (waktu latih, latency, peak memory) HANYA valid bila dari **satu hardware, satu sesi** — sudah dipenuhi lewat tab Final (`results/vast/metrics/inference_benchmark.csv`, RTX 3090, satu sesi 2026-07-25).
-- Angka **performa (F1)** hardware-independent, boleh lintas-hardware bila perlu dibandingkan dengan hasil awal (notebook 03a/b/c, Colab).
+**Memori aman.** Sisa 1.757 MB pada `micro_batch=8`. Kampanye 3090 memakai
+`micro_batch=16` dengan puncak 2.309 MB, jadi 16 pun muat di kartu ini dan
+memberi utilisasi GPU lebih baik.
 
-## Catatan operasional
-- Reproduksi lokal (opsional, tak dipakai untuk angka Bab 4): `run_local_training.py` (RTX 3050, batch 32 pakai grad-accum) → `results/local/` (saat ini kosong, belum dijalankan ulang pasca clean-slate).
-- Bug proses zombie (`job_alive()` salah lapor job masih jalan padahal sudah selesai) sudah diperbaiki di `app.py` — lihat riwayat commit/percakapan untuk detail.
-- Setelah seluruh hasil diunduh (`report_bundle.zip` dari tab Hasil), **DESTROY instance Vast.ai** (bukan Stop) sesuai `VAST_GUIDE.md` §6.
+**Tetapi `micro_batch` bukan knob bebas.** Rumus gradien akumulasi memang
+ekuivalen dengan batch besar, tetapi run-nya tidak: `DataLoader` dengan ukuran
+batch berbeda mengonsumsi RNG berbeda, sehingga mask dropout dan komposisi batch
+ikut berubah. Terbukti dari tiga run berkonfigurasi sama di riwayat: run #1 dan
+#2 (`micro_batch` efektif 8) memberi kurva yang IDENTIK seluruhnya, sedangkan
+run #3 (efektif 16) memberi kurva berbeda dan F1-macro 0,977266 versus 0,974873.
+Artinya training deterministik terhadap seed, tetapi `micro_batch` adalah bagian
+identitas konfigurasi. Grid RM-a mengunci `micro_batch = 32` (efektif 16 pada
+batch 16), dan nilai itu tidak boleh berubah di tengah kampanye.
+
+**Biaya sebenarnya jauh di atas perkiraan awal.** Estimasi 5x perlambatan
+berdasarkan rasio SM dan bandwidth ternyata keliru: pengukuran memberi **7,7x**
+untuk konfigurasi yang sama (143,2 s di 3090 versus 1.101 s di 3050). Proyeksi
+yang berlaku:
+
+| Skenario | Run | Perkiraan di 3050 |
+|---|---|---|
+| RM-a | 26 | sekitar 8 jam |
+| RM-b | 31 | sekitar 30-45 menit |
+| RM-c | 67 | beberapa menit |
+
+Kampanye RM-a perlu dijalankan semalam, bukan beberapa jam.
+
+### Perbandingan dengan run berkonfigurasi sama di RTX 3090
+
+| | RTX 3090 (arsip) | RTX 3050 (lokal) |
+|---|---|---|
+| val F1-macro | 0,974873 | 0,974873 |
+| val F1 judi | 0,958904 | 0,958904 |
+| val accuracy | 0,985021 | 0,985021 |
+| Epoch terbaik | 5 | 3 |
+| Waktu latih | 143,2 s | 1.101,0 s |
+| micro_batch x akumulasi | 16 x 1 | 8 x 2 |
+
+Metrik puncaknya sama sampai enam desimal, tetapi ini **bukan** reproduksi
+bit-identical: kurva per-epoch keduanya berbeda (mis. epoch 1 memberi F1-macro
+0,9584 versus 0,9398), dan nilai terbaik itu kebetulan dicapai pada epoch yang
+berbeda. Yang terjadi adalah kedua model, pada epoch terbaiknya masing-masing,
+menghasilkan confusion matrix yang persis sama atas 1.402 sampel validation.
+
+Implikasinya untuk Bab 4: pergeseran F1 antar hardware ternyata jauh lebih kecil
+daripada dugaan awal (0,1-0,5 pp), tetapi konfigurasi pemenang tetap harus
+ditentukan ulang dari kampanye lokal, bukan disalin dari arsip.
+
+## Langkah berikutnya
+
+1. Tulis Bab 4 dari angka di `outputs/tuning/` (`final_comparison.csv`,
+   `success_criteria.csv`, `tuning_summary.json`).
+
+## Aturan validitas Bab 4
+
+Angka efisiensi (waktu latih, latency, peak memory) hanya sah bila berasal dari
+satu hardware dan satu sesi. F1 tidak bergantung hardware.

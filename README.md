@@ -1,223 +1,232 @@
 # Analisis Trade-off Performa dan Efisiensi Komputasi pada Strategi Adaptasi IndoBERT dengan Retrieval-Augmented Classification untuk Deteksi Komentar Promosi Judi Daring
 
-**Penulis:** Arya Eka Septiaputra (NRP 152022190)  
-**Program Studi:** Informatika — Institut Teknologi Nasional Bandung (ITENAS)  
+**Penulis:** Arya Eka Septiaputra (NRP 152022190)
+**Program Studi:** Informatika — Institut Teknologi Nasional Bandung (ITENAS)
 **Tahun:** 2026
 
 ---
 
-## Deskripsi Proyek
+## Deskripsi
 
-Penelitian ini mengadaptasi model IndoBERT dengan strategi adaptasi ringan, yaitu Frozen Encoder dan Frozen Encoder + Retrieval-Augmented Classification (RAC), untuk domain deteksi komentar promosi judi daring berbahasa Indonesia di YouTube. Penelitian ini membandingkan tiga strategi adaptasi internal IndoBERT — Full Fine-Tuning, Frozen Encoder, dan Frozen Encoder + RAC — dengan tujuan menganalisis trade-off antara performa klasifikasi dan efisiensi komputasi.
-
-Tiga skenario yang dibandingkan:
+Penelitian ini membandingkan tiga strategi adaptasi IndoBERT untuk mendeteksi
+komentar promosi judi daring berbahasa Indonesia di YouTube, dengan fokus pada
+trade-off antara performa klasifikasi dan efisiensi komputasi.
 
 | Kode | Strategi | Deskripsi |
 |------|----------|-----------|
 | RM-a | Full Fine-tuning | Seluruh parameter IndoBERT diperbarui (baseline) |
 | RM-b | Frozen Encoder | Hanya classification head yang dilatih |
-| RM-c | Frozen Encoder + RAC | Frozen encoder diperkuat retrieval berbasis FAISS |
+| RM-c | Frozen Encoder + RAC | Encoder beku diperkuat retrieval berbasis FAISS |
+
+Model dasar `indobenchmark/indobert-base-p2`, label biner (0 = normal,
+1 = promosi judi), metrik utama F1-macro.
 
 ---
 
-## Struktur Folder
+## Setup
+
+Python 3.12 atau lebih baru.
+
+```bash
+python -m venv .venv
+.venv\Scripts\Activate.ps1        # Windows PowerShell
+# source .venv/bin/activate       # Linux / macOS
+
+pip install -r requirements-dev.txt
+pip install -e .
+cp .env.example .env
+```
+
+`pip install -e .` mendaftarkan paket `src` sehingga `from src... import ...`
+berfungsi dari notebook mana pun tanpa memanipulasi `sys.path`.
+
+Untuk GPU, pasang torch dari index CUDA yang sesuai lebih dulu:
+
+```bash
+pip install torch==2.12.1 --index-url https://download.pytorch.org/whl/cu130
+```
+
+---
+
+## Struktur
 
 ```
 IndoBERT-with-RAC/
-│
-├── dataset/
-│   ├── raw/                  # Data mentah (data_labeling.csv, jangan diubah)
-│   ├── processed/            # Data setelah preprocessing + metadata.json
-│   └── splits/               # Train / val / test set (70:15:15)
-│
-├── notebooks/
-│   ├── 01_eda.ipynb                    # Exploratory Data Analysis
-│   ├── 02_preprocessing.ipynb
-│   ├── 03a_rma_finetune.ipynb          # Baseline RM-a (full fine-tuning)
-│   ├── 03b_rmb_frozen.ipynb            # Baseline RM-b (frozen encoder)
-│   ├── 03c_rmc_rac.ipynb               # Baseline RM-c (frozen + RAC)
-│   └── 04a_*_tuning_*.ipynb / 04b_*_tuning_*.ipynb   # Legacy, superseded by app.py
-│
 ├── src/
-│   ├── preprocessing.py      # Fungsi cleaning & normalisasi teks
-│   ├── dataset.py            # PyTorch Dataset class
-│   ├── modeling.py           # Model/head factories (RM-a/b/c)
-│   ├── tuning.py             # Engine training/eval per-config (1 call = 1 config)
-│   ├── job_runner.py         # Subprocess worker untuk app.py (fase rma/rmb/rmc/final)
-│   ├── rac.py                # Logit fusion & FAISS retrieval
-│   ├── reporting.py          # Figur otomatis (kurva, heatmap grid, tradeoff scatter)
-│   └── evaluate.py           # Fungsi evaluasi & pengukuran efisiensi
-│
-├── results/
-│   ├── vast/                 # Output tuning Vast.ai (runs_*.csv, best.json, checkpoints/, metrics/, figures/)
-│   ├── local/                # Output run_local_training.py
-│   └── figures/              # Figur EDA
-│
-├── app.py                    # Streamlit Tuning Control Panel (entry point utama)
-├── run_local_training.py     # Reproduksi lokal RM-a/b/c end-to-end
-├── DATASET.md                # Dokumentasi dataset
-├── PROGRESS.md               # Status terkini proyek (sumber kebenaran)
-├── README.md                 # File ini
-└── requirements.txt          # Daftar dependensi Python
+│   ├── config.py              # Settings (pydantic-settings), seluruh path & default
+│   ├── models/
+│   │   ├── schemas.py         # RMAConfig / RMBConfig / RMCConfig / RunRequest
+│   │   ├── comment_dataset.py # Tokenizer + PyTorch Dataset
+│   │   └── heads.py           # Factory encoder dan classification head
+│   ├── services/
+│   │   ├── preprocessing.py   # TextCleaner, DatasetBuilder
+│   │   ├── data.py            # ExperimentData (split + tokenizer + class weight)
+│   │   ├── features.py        # FeatureExtractor, cache embedding beku
+│   │   ├── training.py        # RMATrainer, RMBTrainer, RMCEvaluator
+│   │   ├── rac.py             # RACClassifier (FAISS + fusi probabilitas)
+│   │   ├── evaluation.py      # ClassificationEvaluator, EfficiencyProfiler
+│   │   ├── campaign.py        # CampaignRunner (orkestrasi run dan benchmark)
+│   │   ├── run_log.py         # RunLogger, HistoryWriter, BestTracker
+│   │   ├── reporting.py       # FigureReporter
+│   │   ├── faiss_benchmark.py # FaissBenchmark
+│   │   ├── aggregation.py     # RunMerger
+│   │   └── workbook.py        # WorkbookBuilder (ekspor Excel)
+│   └── utils/                 # logger, seeding, I/O atomik
+├── tests/                     # pytest, mirror struktur src/
+├── notebooks/                 # ENTRY POINT seluruh pipeline
+├── data/
+│   ├── raw/                   # data_labeling.csv (jangan diubah)
+│   ├── interim/               # data_clean.csv
+│   └── processed/             # train/val/test.csv + metadata.json
+├── models/                    # checkpoint final hasil ekspor
+├── outputs/                   # keluaran eksperimen
+├── tuning_grids/              # rancangan grid per skenario (input kampanye)
+└── docs/                      # laporan EDA, referensi, arsip
 ```
 
 ---
 
-## Setup Environment
+## Struktur branch
 
-### 1. Clone / salin proyek
+Repo ini punya tiga branch dengan peran berbeda, supaya angka efisiensi dari
+hardware yang berbeda tidak tercampur (lihat "Aturan validitas Bab 4" di
+bawah):
 
-```bash
-git clone <repo-url>
-cd ta-indobert-judi
-```
+| Branch | Isi |
+|---|---|
+| `main` | Codebase rujukan (kode saja). Tidak menyimpan hasil eksperimen apa pun — titik awal clone. |
+| `local` | Hasil kampanye yang dijalankan di mesin lokal (RTX 3050 Laptop, 4 GB VRAM). |
+| `vast.ai` | Hasil kampanye yang dijalankan di instance Vast.ai (RTX 3090). |
 
-### 2. Buat virtual environment
-
-```bash
-python -m venv venv
-source venv/bin/activate        # Linux / macOS
-# atau
-venv\Scripts\activate           # Windows
-```
-
-### 3. Install dependensi
+Untuk mulai kerja di instance Vast.ai:
 
 ```bash
-pip install -r requirements.txt
+git clone https://github.com/AryaSeptiaputra/indobert-with-rac.git
+cd indobert-with-rac
+git checkout vast.ai
 ```
 
-### Isi `requirements.txt` (ringkasan)
-
-```
-torch==2.1.0
-transformers==4.38.0
-datasets==2.18.0
-faiss-cpu==1.7.4        # pakai faiss-gpu bila tersedia
-scikit-learn==1.4.0
-pandas==2.2.0
-openpyxl==3.1.2
-numpy==1.26.4
-matplotlib==3.8.0
-seaborn==0.13.2
-tqdm==4.66.0
-langdetect==1.0.9
-streamlit>=1.30          # dibutuhkan app.py (tuning control panel)
-sentencepiece            # dibutuhkan transformers utk mengenali AlbertTokenizer; indobert-lite-*
-                          # sebenarnya fallback ke BertTokenizer (vocab.txt) -- lihat src/dataset.py
-```
-
-> **Catatan Vast.ai:** image harus membawa **torch ≥ 2.4** (dibutuhkan `torch.amp` di `src/tuning.py`) dengan CUDA 12.x — lihat `VAST_GUIDE.md`.
+Codebase (`src/`, `notebooks/`, `tests/`) identik di ketiga branch — yang
+berbeda hanya isi `outputs/` dan narasi `PROGRESS.md`. Jangan gabungkan angka
+efisiensi (waktu latih, latency, peak memory) dari `local` dan `vast.ai` dalam
+satu tabel; F1-macro boleh dibandingkan lintas branch karena tidak bergantung
+hardware.
 
 ---
 
-## Cara Menjalankan
+## Cara menjalankan
 
-### Urutan eksekusi yang benar
-
-Jalankan notebook sesuai urutan nomor:
+Seluruh pipeline dijalankan dari notebook, berurutan:
 
 ```
-01_eda → 02_preprocessing → 03a_rma_finetune → 03b_rmb_frozen → 03c_rmc_rac
+01_eda → 02_preprocessing → 03a_rma → 03b_rmb → 03c_rmc
+       → 04_tuning_campaign → 05_final_benchmark → 06_analysis_export
 ```
 
-Jangan lewati `02_preprocessing` — output-nya dipakai oleh semua notebook model. Notebook `04a_*`/`04b_*` bersifat legacy, sudah digantikan oleh `app.py`.
+| Notebook | Isi |
+|---|---|
+| `01_eda.ipynb` | EDA; mengunci kunci dedup, `max_length`, class weight, placeholder |
+| `02_preprocessing.ipynb` | Membangun split 70:15:15 beserta gate reproduktibilitas |
+| `03a_rma_finetune.ipynb` | Baseline RM-a, satu konfigurasi |
+| `03b_rmb_frozen.ipynb` | Baseline RM-b, ekstraksi fitur beku |
+| `03c_rmc_rac.ipynb` | Baseline RM-c, sweep alpha |
+| `04_tuning_campaign.ipynb` | Kampanye grid ketiga skenario |
+| `05_final_benchmark.ipynb` | Split test dan benchmark inferensi, satu sesi |
+| `06_analysis_export.ipynb` | Biaya FAISS, penggabungan riwayat, ekspor Excel |
 
-### Menjalankan tuning (via app.py)
+Jangan lewati `02_preprocessing.ipynb`: seluruh notebook model bergantung pada
+keluarannya.
 
-Tidak ada script CLI per-skenario — seluruh training/tuning berjalan lewat Streamlit control panel (`app.py`, via `src/job_runner.py`) atau lewat `run_local_training.py` untuk reproduksi lokal end-to-end:
+Menjalankan test:
 
 ```bash
-# Tuning control panel (workflow utama — jalankan di instance Vast.ai)
-streamlit run app.py --server.port 8501 --server.address 0.0.0.0
-
-# Reproduksi lokal semua skenario RM-a/b/c
-python run_local_training.py
+pytest
 ```
 
 ---
 
 ## Hyperparameter
 
-### Nilai awal tuning (starting defaults, `src/tuning.py`)
+Nilai awal (`src/models/schemas.py`) adalah titik masuk tuning, bukan nilai final.
 
 | Parameter | RM-a | RM-b | RM-c |
 |-----------|------|------|------|
-| Base model | `indobenchmark/indobert-base-p2` | sama | sama |
 | Epochs | 5 | 5 | — |
 | Learning rate | 2e-5 | 2e-4 | — |
 | Batch size | 16 | 32 | — |
-| Max token length | 128 | 128 | 128 |
-| Alpha (α) RAC | — | — | 0.3 |
-| k (nearest neighbors) | — | — | 5 |
-| Optimizer | AdamW | AdamW | — |
-| Scheduler | Linear warmup | Linear warmup | — |
+| Warmup ratio | 0,1 | — | — |
+| Weight decay | 0,01 | 0,01 | — |
+| Head | — | linear (atau `mlp`, `hidden_dim` 256) | mewarisi head RM-b |
+| Dropout | — | 0,1 | — |
+| Alpha | — | — | 0,3 |
+| k | — | — | 5 |
+| Optimizer | AdamW | AdamW | — (tanpa training) |
 
-### Konfigurasi final (hasil tuning Vast.ai, 2026-07-25 — lihat `PROGRESS.md`)
-
-| Parameter | RM-a | RM-b | RM-c |
-|-----------|------|------|------|
-| Learning rate | 2e-5 | 1e-3 | — |
-| Epochs | 5 | 10 | — |
-| Batch size | 32 | 32 | — |
-| Head architecture | — | `mlp`, hidden_dim=1024 | inherits RM-b head |
-| Dropout | — | 0.1 | — |
-| Weight decay | 0.01 | 0.0 | — |
-| Alpha (α) RAC | — | — | **0.2** |
-| k (nearest neighbors) | — | — | **5** |
-| weighting | — | — | similarity |
+Nilai final ditentukan lewat kampanye di `04_tuning_campaign.ipynb` dan dicatat
+di `PROGRESS.md`.
 
 ---
 
-## Metrik Evaluasi
+## Mekanisme RAC (RM-c)
 
-### Performa Klasifikasi
-- Accuracy, Precision, Recall, F1-score (macro & weighted)
-- Confusion matrix
+RAC menggabungkan dua **distribusi probabilitas** saat inferensi, bukan logit:
 
-### Efisiensi Komputasi
-- Jumlah trainable parameters
-- Training time (detik per epoch & total)
-- GPU memory usage (MB) — peak saat training
-- Inference latency (ms per sampel)
+```
+p_final = (1 - alpha) * softmax(head(embedding)) + alpha * p_retr
+pred    = argmax(p_final)
+```
 
-Semua hasil tersimpan otomatis di `results/metrics/`.
-
----
-
-## Kriteria Sukses
-
-Strategi ringan (RM-b atau RM-c) dianggap **kompetitif** terhadap full fine-tuning (RM-a) jika memenuhi minimal **2 dari 3** syarat berikut:
-
-- Selisih F1-score ≤ 3 poin persentase
-- Pengurangan trainable parameters ≥ 90%
-- Pengurangan training time ≥ 50%
+`p_retr` adalah distribusi label dari k tetangga terdekat di indeks FAISS yang
+dibangun HANYA dari split train. Softmax diterapkan sekali, di cabang BERT
+sebelum fusi, dan tidak pernah setelahnya: kedua masukan sudah berupa distribusi
+dan bobot fusinya berjumlah satu, sehingga hasilnya sudah sah. Softmax kedua akan
+meratakan selisih dan bisa mengubah argmax pada kasus nyaris seri. Fusi level
+probabilitas dan level logit tidak ekuivalen.
 
 ---
 
-## Status Eksperimen
+## Metrik evaluasi
 
-| Tahap | Status |
-|-------|--------|
-| Pengumpulan & pelabelan data | ✅ Selesai |
-| EDA | ✅ Selesai |
-| Preprocessing | ✅ Selesai |
-| RM-a (full fine-tuning) — baseline notebook | ✅ Selesai |
-| RM-b (frozen encoder) — baseline notebook | ✅ Selesai |
-| RM-c (frozen + RAC) — baseline notebook | ✅ Selesai |
-| Sistem tuning (UI Streamlit → Vast.ai) | ✅ Selesai dibangun & dipakai |
-| Tuning RM-a/RM-b/RM-c (Vast.ai) | ✅ Selesai (26+31+67 run, 2026-07-25) |
-| Tuning final + benchmark satu-sesi (TEST) | ✅ Selesai (RTX 3090, 2026-07-25) |
-| Analisis hasil & penulisan Bab 4 | 🟡 Berjalan |
+**Klasifikasi:** accuracy, precision, recall, F1 (macro dan weighted), confusion
+matrix. Data timpang sekitar 4,5:1, sehingga metrik utama F1-macro dengan F1
+kelas judi sebagai pemecah seri.
 
-> Detail status & langkah berikutnya: lihat [`PROGRESS.md`](PROGRESS.md) dan [`VAST_GUIDE.md`](VAST_GUIDE.md).
+**Efisiensi:** jumlah trainable parameter, waktu latih, peak GPU memory, dan
+latency inferensi per sampel.
+
+**Kriteria sukses:** strategi ringan dianggap kompetitif bila memenuhi minimal
+dua dari tiga syarat berikut.
+
+- Selisih F1 tidak lebih dari 3 poin persentase terhadap RM-a
+- Pengurangan trainable parameter minimal 90%
+- Pengurangan waktu latih minimal 50%
 
 ---
 
-## Referensi Utama
+## Aturan validitas Bab 4
 
-- Manullang et al. (2025) — JAIC, DOI: `10.30871/jaic.v9i3.9468`
-- Devlin et al. (2019) — BERT, DOI: `10.18653/v1/N19-1423`
-- Yu et al. (2023) — RAC for few-shot text classification, DOI: `10.18653/v1/2023.findings-emnlp.477`
-- Tandi et al. (2025) — JISEBI, frozen IndoBERT untuk Textual Entailment
-- Long et al. (2022) — CVPR, DOI: `10.1109/CVPR52688.2022.00683`
+Angka efisiensi (waktu latih, latency, peak memory) hanya sah bila diukur pada
+**satu hardware dan satu sesi**. Jangan mencampur angka dari mesin atau sesi
+berbeda dalam satu tabel efisiensi. F1 tidak bergantung hardware dan boleh
+dibandingkan lintas mesin.
+
+---
+
+## Catatan penyimpangan dari standar `writer-code`
+
+- **Tidak ada folder `scripts/`.** Seluruh pipeline dipanggil dari notebook,
+  sehingga notebook berperan sebagai entry point.
+- **Tidak ada layer API.** Proyek ini penelitian, bukan aplikasi berbackend.
+
+---
+
+## Referensi utama
+
+- Manullang dkk. (2025) — JAIC, DOI: `10.30871/jaic.v9i3.9468`
+- Devlin dkk. (2019) — BERT, DOI: `10.18653/v1/N19-1423`
+- Wilie dkk. (2020) — IndoNLU
+- Yu dkk. (2023) — RAC untuk few-shot text classification, DOI: `10.18653/v1/2023.findings-emnlp.477`
+- Tandi dkk. (2025) — JISEBI, frozen IndoBERT untuk Textual Entailment
+- Lan dkk. (2019) — ALBERT
+
+Daftar lengkap: `docs/DAFTAR_REFERENSI.pdf`.

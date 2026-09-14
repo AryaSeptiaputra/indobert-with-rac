@@ -1,11 +1,11 @@
 # RM-b — Rancangan Eksplorasi Hyperparameter (27 run: 4 Tahap 1 + 2 perluasan + 15 Tahap 2 + 6 Tahap 3)
 
-Dokumen kerja untuk tuning RM-b (frozen encoder + head) di tab **Tuning** pada `app.py`.
+Dokumen kerja untuk tuning RM-b (frozen encoder + head) lewat `04_tuning_campaign.ipynb`.
 Isi kolom **Alasan** langsung dapat disalin ke field `catatan` di UI. Pola dokumen ini
 sengaja disamakan dengan `RMA_TUNING_GRID.md` supaya rigor-nya setara.
 
 > **CSV yang tersedia** (semua siap diunggah lewat mode **Batch → Tempel/unggah tabel
-> CSV** di tab Tuning `app.py`, kolom: `head_arch,hidden_dim,epochs,lr,dropout,
+> CSV** di `04_tuning_campaign.ipynb`, kolom: `head_arch,hidden_dim,epochs,lr,dropout,
 > weight_decay,batch,catatan`):
 > - `RMB_TUNING_GRID.csv` — 4 baris Tahap 1 (tak bergantung hasil apa pun).
 > - `RMB_TUNING_GRID_STAGE1B.csv` — 2 baris perluasan Tahap 1 (`hidden_dim` 768/1024),
@@ -20,7 +20,7 @@ sengaja disamakan dengan `RMA_TUNING_GRID.md` supaya rigor-nya setara.
 ## Metode: 3 tahap mengikuti struktur ketergantungan field
 
 RM-b jauh lebih murah dari RM-a — melatih head di atas fitur beku (`train_eval_rmb`,
-`src/tuning.py:179-217`), hitungan **detik**/run, bukan menit. Tapi murahnya komputasi
+`src/services/training.py:179-217`), hitungan **detik**/run, bukan menit. Tapi murahnya komputasi
 **tidak** menghapus risiko *overfitting ke validation set* (~1.402 sampel) — makin banyak
 konfigurasi dibandingkan, makin besar peluang pemenang menang karena kebetulan, persis
 alasan `RMA_TUNING_GRID.md` menolak grid 5-sumbu penuh untuk RM-a. Jadi kampanye ini
@@ -28,12 +28,12 @@ alasan `RMA_TUNING_GRID.md` menolak grid 5-sumbu penuh untuk RM-a. Jadi kampanye
 
 Partisi tahap ikuti struktur ketergantungan nyata di kode, bukan asumsi:
 
-- **`head_arch` × `hidden_dim` terkopel struktural** (`build_head`, `src/modeling.py:157-165`):
+- **`head_arch` × `hidden_dim` terkopel struktural** (`build_head`, `src/models/heads.py:157-165`):
   `hidden_dim` cuma dipakai `MLPHead`; `FrozenHead` (linear) tak punya parameter itu sama
   sekali. Tak masuk akal digrid bersama field lain sebelum arsitektur diputuskan.
 - **`lr` × `epochs` terkopel kuat dengan arsitektur** — Peters, Ruder, & Smith (2019)
   *"To tune or not to tune? Adapting pretrained representations to diverse tasks"*
-  (dikutip di `src/tuning.py:39`): pada rezim *feature-based* (encoder beku), head yang
+  (dikutip di `src/services/training.py:39`): pada rezim *feature-based* (encoder beku), head yang
   diinisialisasi acak butuh **lr lebih tinggi** dan **epoch lebih banyak** dibanding
   fine-tuning penuh — sebab itu `RMB_DEFAULT` lr-nya 2e-4 (10× lipat RM-a) dan rentang
   epoch di sini diuji jauh lebih lebar (5–30) dari RM-a (3–8).
@@ -51,7 +51,7 @@ Tahap 1–2; Tahap 3 menguji batch 16/64 sebagai salah satu knop independen).
 ## Tahap 1 — Keputusan arsitektur head (4 run, TANPA ketergantungan hasil)
 
 **Dikunci untuk semua sel:** `epochs=5, lr=2e-4, dropout=0.1, weight_decay=0.01, batch=32`
-(= `RMB_DEFAULT` penuh, `src/tuning.py:40-41`) — hanya `head_arch`/`hidden_dim` divariasi.
+(= `RMB_DEFAULT` penuh, `src/services/training.py:40-41`) — hanya `head_arch`/`hidden_dim` divariasi.
 
 Motivasi: sesi tuning lama (sebelum clean-slate, hasilnya sudah dihapus — dicatat di
 `PROGRESS.md`) menemukan "ganti head linear → MLP = lompatan terbesar (val 0,938→0,956)".
@@ -150,7 +150,7 @@ knop **independen** (2 varian non-default per knop, field lain tetap di nilai pe
 |---|---|---|---|
 | 26 | dropout | **0,0** (vs default 0,1) | Devlin dkk. (2019) pakai dropout 0,1 sbg standar BERT — uji apakah head sekecil ini justru dirugikan oleh regularisasi tsb |
 | 27 | dropout | **0,3** (vs default 0,1) | Regularisasi lebih kuat — dicek meski sel pemenang plateau, bukan menurun, jadi ekspektasi realistis: perbaikan tipis atau tak ada |
-| 28 | weight_decay | **0,0** (vs default 0,01) | AdamW *decoupled weight decay* (Loshchilov & Hutter, dikutip `src/tuning.py:36`) — cek apakah regularisasi ini bahkan berpengaruh pada head sekecil ini |
+| 28 | weight_decay | **0,0** (vs default 0,01) | AdamW *decoupled weight decay* (Loshchilov & Hutter, dikutip `src/services/training.py:36`) — cek apakah regularisasi ini bahkan berpengaruh pada head sekecil ini |
 | 29 | weight_decay | **0,1** (vs default 0,01) | Regularisasi 10× lebih kuat — sama semangatnya dengan Tahap 2 RM-a |
 | 30 | batch | **16** (vs default 32) | RM-a membuktikan batch=32 unggul dari 16 (lebih cepat & F1 setara/lebih baik) — dicek ulang di RM-b karena training di atas fitur beku (tanpa grad-accum) punya dinamika update berbeda |
 | 31 | batch | **64** (vs default 32) | Batch lebih besar lagi — apakah tren "batch besar menang" dari RM-a berlanjut, atau ada titik baliknya? |
@@ -177,7 +177,7 @@ Isi dari kolom **Alasan** di tabel masing-masing tahap. Contoh:
 ## Aturan seleksi (identik RM-a — sudah terimplementasi di kode, tak perlu langkah manual)
 
 1. **Metrik utama** `val_f1_macro`; **tie-break** `val_f1_judi` (F1 kelas-1/judi).
-2. **Ambang seri ≤0,15pp** (`TIE_THRESHOLD_PP`, `src/tuning.py:46`, kolom
+2. **Ambang seri ≤0,15pp** (`TIE_THRESHOLD_PP`, `src/services/training.py:46`, kolom
    `is_tie_with_best` otomatis terisi di `runs_rmb.csv`) → pilih konfigurasi lebih murah
    (epoch lebih kecil / arsitektur lebih ringan).
 3. **Baca grid sebagai permukaan**: pivot `lr × epochs` di Tahap 2 (per `hidden_dim` kalau
@@ -200,7 +200,7 @@ untuk 26 run). Anggaran bukan kendala di sini — batasan sebenarnya tetap risik
 overfitting-ke-val yang dijelaskan di bagian Metode, bukan biaya GPU.
 
 Jalankan **1× Mode SMOKE** sebelum Tahap 1 penuh untuk memastikan pipeline menulis baris
-ke `results/vast/runs_rmb.csv` tanpa error (dan ekstraksi fitur beku sukses).
+ke `outputs/tuning/runs_rmb.csv` tanpa error (dan ekstraksi fitur beku sukses).
 
 ---
 
@@ -219,4 +219,4 @@ head linear ke MLP (`PROGRESS.md`) — hasil lama sudah dihapus dan tak lagi ada
 jadi Tahap 1 di atas menguji ulang dari nol, bukan mengasumsikan temuan itu berulang.
 
 Prior-work tugas identik (deteksi judi Indonesia) untuk pembanding hasil akhir:
-Kamdan dkk. (2025), Manullang dkk. (2025, JAIC) — daftar lengkap di `DAFTAR_REFERENSI.pdf`.
+Kamdan dkk. (2025), Manullang dkk. (2025, JAIC) — daftar lengkap di `docs/DAFTAR_REFERENSI.pdf`.

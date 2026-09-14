@@ -1,10 +1,10 @@
 # RM-c — Rancangan Eksplorasi Hyperparameter (67 run)
 
-Dokumen kerja untuk tuning RM-c (RAC — Retrieval-Augmented Classification) di tab
-**Tuning** pada `app.py`. Pola sama dengan `RMA_TUNING_GRID.md`/`RMB_TUNING_GRID.md`,
+Dokumen kerja untuk tuning RM-c (RAC — Retrieval-Augmented Classification) lewat
+`04_tuning_campaign.ipynb`. Pola sama dengan `RMA_TUNING_GRID.md`/`RMB_TUNING_GRID.md`,
 disesuaikan karena RM-c **tidak melatih apa pun** — hanya fusi probabilitas head RM-b
 terbaik (`checkpoints/rmb_best.pt`, run #28: `mlp/1024, lr=1e-3, epochs=10, wd=0.0`)
-dengan distribusi hasil retrieval FAISS (`eval_rmc`, `src/tuning.py:233-249`; index
+dengan distribusi hasil retrieval FAISS (`RMCEvaluator` di `src/services/training.py`; index
 dibangun HANYA dari embedding train — anti-leakage, lihat `DATASET.md`).
 
 > **CSV yang tersedia** (siap diunggah lewat mode **Batch → Tempel/unggah tabel CSV**):
@@ -20,10 +20,10 @@ dibangun HANYA dari embedding train — anti-leakage, lihat `DATASET.md`).
 ```python
 p_final = (1 - alpha) * softmax(head(embedding)) + alpha * p_retrieval
 ```
-(`rac.fuse`, `src/rac.py:96-98`) — `alpha=0` murni head RM-b, `alpha=1` murni retrieval
+(`rac.fuse`, `src/services/rac.py:96-98`) — `alpha=0` murni head RM-b, `alpha=1` murni retrieval
 k-NN. `p_retrieval` dihitung dari `k` tetangga terdekat (cosine similarity, index FAISS
 train-only) dengan bobot `similarity` (mirip cosine, default) atau `uniform` (voting rata,
-`src/rac.py:59-74`).
+`src/services/rac.py:59-74`).
 
 **Karena tanpa training, RM-c jauh lebih murah bahkan dari RM-b** (hitungan
 milidetik–detik/eval, tanpa forward pass BERT — cuma index search + aritmetika fusi) —
@@ -47,17 +47,17 @@ apa pun `weighting`-nya) — jadi diuji terpisah di sel pemenang, bukan digrid b
   (`alpha=0`, setara RM-b sendiri — jadi baris ini sekaligus jadi pembanding langsung
   "apakah RAC benar memperbaiki RM-b?") sampai murni retrieval (`alpha=1`).
 - `k ∈ {1, 3, 5, 10, 20, 50}` (6 titik) — rentang sama persis dengan grid ad-hoc yang
-  sudah pernah dipakai di `run_local_training.py:185` dan riwayat tuning RM-c sebelum
+  sudah pernah dipakai di riwayat kampanye lama dan riwayat tuning RM-c sebelum
   clean-slate (dicatat `DATASET.md`: pemenang lama α=0,5 k=3 — **historis, hasil lama
   sudah dihapus, tak diasumsikan berulang**, sama prinsipnya dengan keputusan arsitektur
   RM-b).
 
-11 × 6 = **66 kombinasi**. `weighting="similarity"` (default `RMC_DEFAULT`, `src/tuning.py:43`)
+11 × 6 = **66 kombinasi**. `weighting="similarity"` (default `RMC_DEFAULT`, `src/services/training.py:43`)
 dikunci di seluruh sel — mendasarkan bobot tetangga pada cosine similarity, bukan voting
 rata, sesuai desain default `rac.py`.
 
 **Landasan:** Yu dkk. (2023) *"Retrieval-augmented few-shot text classification"*
-(dikutip `src/tuning.py:42`) dan Long dkk. (2022) *"Retrieval augmented classification
+(dikutip `src/services/training.py:42`) dan Long dkk. (2022) *"Retrieval augmented classification
 for long-tail visual recognition"* — keduanya menunjukkan performa RAC sensitif terhadap
 bobot fusi dan jumlah tetangga, memotivasi grid dua-sumbu ini alih-alih menerka satu nilai.
 Chalkidis & Kementchedjhieva (2023) *"Retrieval-augmented multi-label text classification"*
@@ -121,4 +121,4 @@ sebenarnya tetap disiplin val/test dan ambang tie-break di atas.
 | Chalkidis & Kementchedjhieva (2023) | Retrieval-augmented text classification — konteks task teks (bukan visual) |
 
 Prior-work tugas identik (deteksi judi Indonesia): Kamdan dkk. (2025), Manullang dkk.
-(2025) — daftar lengkap `DAFTAR_REFERENSI.pdf`.
+(2025) — daftar lengkap `docs/DAFTAR_REFERENSI.pdf`.

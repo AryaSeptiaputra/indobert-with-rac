@@ -1,0 +1,54 @@
+{
+  "dataset/raw/data_labeling.csv": {
+    "sha256": "c15f01e633674c7c6b33ba961d10816fc5b4a0da4236c958b0bf117ed42f8fac",
+    "bytes": 4025351
+  },
+  "dataset/processed/data_clean.csv": {
+    "sha256": "af2c149412d63bde5d14fdba8e1923ae10c7b804bd1223f414b039073d0b136d",
+    "bytes": 1112332
+  },
+  "dataset/processed/metadata.json": {
+    "sha256": "e1f67fc76738555fe617bdc9c4a5a8d9e6e2e0143a9e1415ba16e01cddce4b99",
+    "bytes": 1426
+  },
+  "dataset/splits/train.csv": {
+    "sha256": "c419bb079d7914980e9c844cae7c4e44db4f3ddd128288855e9bfa0443d85f51",
+    "bytes": 742244
+  },
+  "dataset/splits/val.csv": {
+    "sha256": "3fb36cd07f326cd5d225327bdade84f493b5fef33ec4edeabf891a79751ca871",
+    "bytes": 159201
+  },
+  "dataset/splits/test.csv": {
+    "sha256": "41c232d3f6625660a17c9f6395cf7f47adb8169936bc78d8164b2f6c3b4eefab",
+    "bytes": 158782
+  },
+  "results/vast/runs_rma.csv": {
+    "sha256": "413ee1a93fcdadab3ec3373b03b8e3e9158343f6b642098ddc71fd8bb0fea661",
+    "bytes": 8883
+  },
+  "results/vast/runs_rmb.csv": {
+    "sha256": "594098fb1451d362c0ed3b9cc22b5591894c37e2ef6811b737db42a31448eea3",
+    "bytes": 10333
+  },
+  "results/vast/runs_rmc.csv": {
+    "sha256": "e89631d5bd8690562604121493c7c579e8627596c7e3d374503a40115fc096d5",
+    "bytes": 20828
+  },
+  "results/vast/best.json": {
+    "sha256": "80d3d46619eba23873ab14f341c3fa732f92cc5a3aff82e4be25c233b2f673df",
+    "bytes": 932
+  },
+  "results/vast/metrics/final_comparison.csv": {
+    "sha256": "a2cf816b8cdd8ebe27a33fddc93242b1a6e942730aa2deb2f158d16a79acdf2d",
+    "bytes": 758
+  },
+  "results/vast/metrics/inference_benchmark.csv": {
+    "sha256": "d99474b81886136ee901d7a6b686438c5aa482c7708d5ad11f294809e5834188",
+    "bytes": 106
+  },
+  "results/vast/metrics/success_criteria.csv": {
+    "sha256": "693bc5eb7e8e215caf264ee9609945da2f5e48a2f0509d285bd7f98ab62bf75b",
+    "bytes": 287
+  }
+}

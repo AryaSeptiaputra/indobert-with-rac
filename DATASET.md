@@ -1,12 +1,12 @@
 # DATASET.md — Dokumentasi Dataset & Preprocessing
 
-Deteksi komentar promosi judi daring berbahasa Indonesia di YouTube (klasifikasi biner: `0` = non-judi, `1` = promosi judi). Dokumen ini merangkum dataset final dan pipeline preprocessing yang menghasilkannya. Keputusan lengkap ada di `EDA_REPORT_BAGIAN1.md`, `EDA_REPORT_BAGIAN2.md`, dan `EDA_REPORT_BAGIAN3.md`.
+Deteksi komentar promosi judi daring berbahasa Indonesia di YouTube (klasifikasi biner: `0` = non-judi, `1` = promosi judi). Dokumen ini merangkum dataset final dan pipeline preprocessing yang menghasilkannya. Keputusan lengkap ada di `docs/EDA_REPORT_BAGIAN1.md`, `docs/EDA_REPORT_BAGIAN2.md`, dan `docs/EDA_REPORT_BAGIAN3.md`.
 
 ## Sumber
 
 | | |
 |---|---|
-| File mentah | `dataset/raw/data_labeling.csv` (14.237 baris, komentar YouTube berlabel) |
+| File mentah | `data/raw/data_labeling.csv` (14.237 baris, komentar YouTube berlabel) |
 | Kolom dipakai | `textOriginal` (teks), `label` (0/1) |
 | Kolom lain | metadata (commentId, author, timestamp, dll) — di-drop |
 | Rentang waktu | 2025-07-31 s/d 2025-10-01 (~62 hari) |
@@ -14,7 +14,7 @@ Deteksi komentar promosi judi daring berbahasa Indonesia di YouTube (klasifikasi
 
 ## Pipeline Preprocessing
 
-Dieksekusi oleh `notebooks/02_preprocessing.ipynb` (fungsi di `src/preprocessing.py`).
+Dieksekusi oleh `notebooks/02_preprocessing.ipynb` (fungsi di `src/services/preprocessing.py`).
 
 ```
 load raw (textOriginal, label)
@@ -45,7 +45,7 @@ load raw (textOriginal, label)
 | Angka → `[NUM]` | **hanya digit berdiri sendiri** (`\b\d+\b`) | `depo 50000` → `depo [NUM]` |
 | — dipertahankan | brand alfanumerik | `DORA77`, `PROBET855` tetap utuh |
 
-**Tidak** dilakukan: lowercase manual (`do_lower_case=True`), penghapusan emoji, penghapusan tanda baca, drop komentar pendek/non-Indonesia/outlier panjang (lihat justifikasi `EDA_REPORT_BAGIAN3.md`).
+**Tidak** dilakukan: lowercase manual (`do_lower_case=True`), penghapusan emoji, penghapusan tanda baca, drop komentar pendek/non-Indonesia/outlier panjang (lihat justifikasi `docs/EDA_REPORT_BAGIAN3.md`).
 
 > Catatan perilaku: brand yang menuliskan angka **terpisah spasi** (mis. `PROBET 855`) akan menjadi `PROBET [NUM]` karena `855` menjadi token digit berdiri sendiri. Huruf brand (sinyal utama) tetap dipertahankan.
 
@@ -83,15 +83,15 @@ Dipakai pada loss berbobot (mis. `CrossEntropyLoss(weight=...)`) untuk menangani
 
 | Path | Isi |
 |------|-----|
-| `dataset/splits/train.csv` · `val.csv` · `test.csv` | kolom `textOriginal, text_clean, label` |
-| `dataset/processed/data_clean.csv` | gabungan ketiga split + kolom `split` |
-| `dataset/processed/metadata.json` | count before/after, distribusi, class weights, config |
+| `data/processed/train.csv` · `val.csv` · `test.csv` | kolom `textOriginal, text_clean, label` |
+| `data/interim/data_clean.csv` | gabungan ketiga split + kolom `split` |
+| `data/processed/metadata.json` | count before/after, distribusi, class weights, config |
 
 Skema kolom split: `textOriginal` (mentah, untuk traceability), `text_clean` (input model), `label` (0/1).
 
 ## Tokenisasi (untuk fase modeling)
 
-Dikunci di `src/dataset.py`:
+Dikunci di `src/models/comment_dataset.py`:
 
 - Base tokenizer: **`indobenchmark/indobert-base-p2`** (`do_lower_case=True`).
 - **max_length = 128** (P99 panjang token `text_clean` = 58; hanya 0,08% > 128).
@@ -103,12 +103,12 @@ Dikunci di `src/dataset.py`:
 ## Reproduktibilitas
 
 - Seed **42** di seluruh langkah (dedup deterministik, split stratified).
-- Jalankan ulang: `notebooks/02_preprocessing.ipynb` (butuh `dataset/raw/data_labeling.csv`).
-- Modul: `src/preprocessing.py` (pure pandas/sklearn), `src/dataset.py` (torch/transformers).
+- Jalankan ulang: `notebooks/02_preprocessing.ipynb` (butuh `data/raw/data_labeling.csv`).
+- Modul: `src/services/preprocessing.py` (pure pandas/sklearn), `src/models/comment_dataset.py` (torch/transformers).
 
 ## Catatan untuk RM-c (RAC)
 
-Index FAISS **hanya dibangun dari train set** (`dataset/splits/train.csv`). Membangunnya dari data yang memuat val/test akan menyebabkan retrieval menemukan tetangga nyaris identik → `logit_retrieval` tinggi palsu dan keunggulan RM-c menjadi artefak (bukan temuan valid). Prinsip anti-leakage ini non-negotiable.
+Index FAISS **hanya dibangun dari train set** (`data/processed/train.csv`). Membangunnya dari data yang memuat val/test akan menyebabkan retrieval menemukan tetangga nyaris identik → `p_retr` tinggi palsu dan keunggulan RM-c menjadi artefak (bukan temuan valid). Prinsip anti-leakage ini non-negotiable.
 
 ### Hyperparameter final RM-c (setelah tuning di validation, Vast.ai)
 
@@ -120,7 +120,7 @@ Fusi probabilitas: `p_final = (1-α)·softmax(head) + α·p_retr`; retrieval = c
 | **k (neighbors)** | **5** | sama seperti default awal |
 | weighting | `similarity` | vs `uniform` (dicek terpisah, similarity menang) |
 
-Ditentukan lewat kampanye tuning `app.py`/`src/job_runner.py` di Vast.ai (67 run total: 66 grid α×k + 1 cek weighting), val F1-macro 0.9699. Modul: `src/rac.py`. Angka lama di bawah (α=0.5, k=3, dari `notebooks/03c_rmc_rac.ipynb`/Colab) adalah **baseline historis pra-tuning** — dipertahankan untuk narasi metodologi, bukan angka final.
+Ditentukan lewat kampanye tuning di Vast.ai (arsip) (67 run total: 66 grid α×k + 1 cek weighting), val F1-macro 0.9699. Modul: `src/services/rac.py`. Angka lama di bawah (α=0.5, k=3, dari `notebooks/03c_rmc_rac.ipynb`/Colab) adalah **baseline historis pra-tuning** — dipertahankan untuk narasi metodologi, bukan angka final.
 
 ### Ringkasan hasil ketiga skenario — angka final (test set: 1.149 non-judi / 256 judi, satu sesi RTX 3090, 2026-07-25)
 
@@ -130,8 +130,8 @@ Ditentukan lewat kampanye tuning `app.py`/`src/job_runner.py` di Vast.ai (67 run
 | RM-b (frozen + MLP head) | hidden_dim=1024, lr=1e-3, epochs=10 | 0,9486 | 0,9159 | 0,9176 | 0,9141 | 21 | 789.506 (0,72%) | 11,65 s | 9,08 ms |
 | **RM-c (RAC, k=5, α=0,2)** | weighting=similarity (head = RM-b di atas) | **0,9497** | **0,9176** | **0,9213** | 0,9141 | 20 | **0** (pakai ulang RM-b) | **0,0 s** | 10,96 ms |
 
-Sumber: `results/vast/metrics/final_comparison.csv` + `success_criteria.csv`. **RM-b dan RM-c lolos 3/3 kriteria sukses** (RM-b: gap F1 1,21pp / reduksi param 99,28% / reduksi waktu latih 85,64%; RM-c: gap F1 1,10pp / reduksi param 100% / reduksi waktu latih 100%). RAC memberi perbaikan kecil tapi konsisten di atas RM-b murni (+0,11pp F1-macro), seluruhnya dari perbaikan precision (mengurangi ±1 false positive dari 1.405 sampel test) — dibaca sebagai bonus tanpa risiko, bukan pendorong utama argumen kompetitif (belum diuji signifikansi statistik formal, satu seed/split).
+Sumber: `outputs/tuning/metrics/final_comparison.csv` + `success_criteria.csv`. **RM-b dan RM-c lolos 3/3 kriteria sukses** (RM-b: gap F1 1,21pp / reduksi param 99,28% / reduksi waktu latih 85,64%; RM-c: gap F1 1,10pp / reduksi param 100% / reduksi waktu latih 100%). RAC memberi perbaikan kecil tapi konsisten di atas RM-b murni (+0,11pp F1-macro), seluruhnya dari perbaikan precision (mengurangi ±1 false positive dari 1.405 sampel test) — dibaca sebagai bonus tanpa risiko, bukan pendorong utama argumen kompetitif (belum diuji signifikansi statistik formal, satu seed/split).
 
 **Catatan latency:** latency inferensi RM-b/RM-c **hampir sama** dengan RM-a (bahkan RM-c sedikit lebih lambat) — encoder BERT-base 110M-parameter tetap dijalankan penuh saat inferensi di ketiganya, jadi efisiensi RM-b/RM-c ada di waktu latih & jumlah trainable params, bukan kecepatan prediksi. Ini motivasi eksplorasi lanjutan memakai varian IndoBERT yang lebih ringan sebagai encoder (lihat `PROGRESS.md`).
 
-> **Caveat efisiensi (Bab 4) — terpenuhi.** Syarat "satu hardware/satu sesi" untuk angka efisiensi (waktu latih, latency, peak memory) sudah dipenuhi lewat tab Final `app.py`: ketiga model diukur pada RTX 3090 yang sama dalam satu sesi (2026-07-25), lihat `results/vast/metrics/inference_benchmark.csv`. Angka F1 boleh dibandingkan lintas-hardware (hardware-independent); angka efisiensi TIDAK boleh dicampur dengan hasil Colab/lokal lama.
+> **Caveat efisiensi (Bab 4) — terpenuhi.** Syarat "satu hardware/satu sesi" untuk angka efisiensi (waktu latih, latency, peak memory) sudah dipenuhi lewat benchmark final satu sesi: ketiga model diukur pada RTX 3090 yang sama dalam satu sesi (2026-07-25), lihat `outputs/tuning/metrics/inference_benchmark.csv`. Angka F1 boleh dibandingkan lintas-hardware (hardware-independent); angka efisiensi TIDAK boleh dicampur dengan hasil Colab/lokal lama.
