@@ -1,0 +1,9 @@
+{
+  "n_vectors": 6588,
+  "dim": 768,
+  "build_time_ms_mean": 4.0083,
+  "build_time_ms_min": 2.9696,
+  "index_size_mb": 19.301,
+  "rss_delta_mb": 19.75,
+  "index_ntotal": 6588
+}

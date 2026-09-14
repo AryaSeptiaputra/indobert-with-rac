@@ -1,0 +1,2 @@
+run_id,scenario,batch_id,model_name,lr,epochs,batch,warmup_ratio,weight_decay,micro_batch,seed,micro_batch_eff,grad_accum,val_f1_macro,val_acc,val_precision_macro,val_recall_macro,val_f1_judi,best_epoch,train_time_s,peak_mem_mb,trainable_params,catatan,overfit_signal,timestamp
+1,rma,,indobenchmark/indobert-base-p2,2e-05,5,16,0.1,0.01,8,42,8,2,0.978364,0.987161,0.982835,0.974034,0.964567,5,130.11,2334.2,109485314,"baseline kanonik IndoNLU/Wilie 2020, titik acuan seluruh grid",False,2026-09-14 16:47:55
