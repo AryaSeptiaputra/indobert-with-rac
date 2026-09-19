@@ -48,8 +48,14 @@ tidak ada UI.
 
 Jangan lewati `02_preprocessing.ipynb`: notebook model bergantung padanya.
 
+03a sampai 03c hanya pengantar dan baseline satu konfigurasi (keluaran ke
+`outputs/baseline/`, tidak dibaca notebook lain). Kampanye sesungguhnya ada di 04,
+dalam satu sesi dan satu mesin: RM-a → RM-b → RM-c standar → eksplorasi RM-c →
+putusan juara RM-c. Tahap RM-b menyimpan state setiap head di
+`checkpoints/rmb_heads/`; eksplorasi memuat head itu, tidak melatih ulang.
+
 ```bash
-pytest        # 243 test, ~50 detik, tanpa GPU
+pytest        # 353 test, tanpa GPU
 ```
 
 ## Arsitektur
@@ -79,7 +85,9 @@ data/raw/data_labeling.csv
 | `src/services/data.py` | `ExperimentData` |
 | `src/services/features.py` | `FeatureExtractor`, `FeatureSet` |
 | `src/services/training.py` | `RMATrainer`, `RMBTrainer`, `RMCEvaluator` |
-| `src/services/rac.py` | `RACClassifier` |
+| `src/services/rac.py` | `RACClassifier`, `NeighborCache` |
+| `src/services/fusion_ablation.py` | `FusionFormulaComparator`: fusi linear produksi dan Rumus 1-4 |
+| `src/services/rmc_exploration.py` | `RMCExplorer`: seluruh head RM-b x seluruh rumus fusi; seleksi, Pareto, bootstrap berpasangan |
 | `src/services/evaluation.py` | `ClassificationEvaluator`, `EfficiencyProfiler` |
 | `src/services/campaign.py` | `CampaignRunner` — orkestrasi run, batch, benchmark final |
 | `src/services/run_log.py` | `RunLogger`, `HistoryWriter`, `BestTracker` |
@@ -105,6 +113,11 @@ sesudahnya.** Kedua masukan sudah berupa distribusi dan bobot fusi berjumlah
 satu, jadi `p_final` sudah sah; softmax kedua akan meratakan selisih dan bisa
 mengubah argmax pada kasus nyaris seri. Saat menulis Bab 4, nyatakan fusinya di
 level probabilitas — fusi level probabilitas dan level logit tidak ekuivalen.
+
+Itu rumus RM-c standar. Eksplorasi RM-c juga menguji Rumus 1 (fusi level SKOR,
+Long dkk. 2022), Rumus 2 dan 3 (alpha adaptif per sampel), dan Rumus 4 (geometric
+pooling). Bila juara eksplorasi bukan fusi linear, aturan "softmax sekali, level
+probabilitas" di atas tidak berlaku untuknya; nyatakan rumus juaranya di Bab 4.
 
 ## Aturan yang tidak boleh dilanggar
 
@@ -137,6 +150,12 @@ level probabilitas — fusi level probabilitas dan level logit tidak ekuivalen.
 - `history/{scenario}_history.csv` — kurva per-epoch, satu berkas menumpuk per
   skenario dengan kolom `run_id`.
 - `checkpoints/`, `figures/`, `metrics/`, `tuning_summary.json`, `hardware.json`.
+  `checkpoints/rmb_heads/run_{id}.pt` menyimpan SETIAP head RM-b (bukan hanya
+  juara). `checkpoints/rmc_best.pt` memuat head dan rumus fusi juara RM-c bila
+  juaranya hasil eksplorasi.
+- `rmc_exploration/` — keluaran eksplorasi RM-c: `rmc_exploration_runs.csv` (satu
+  baris per head x konfigurasi fusi), ringkasan per head dan per rumus, dan
+  `champion_decision.json`. Tidak menyentuh `runs_rmc.csv`.
 
 `outputs/_archive_*/` berisi hasil kampanye Vast.ai lama. Disimpan sebagai jalan
 mundur sampai kampanye lokal terbukti berhasil, lalu dihapus. Jangan dipakai
@@ -166,6 +185,14 @@ rentang, bukan untuk mengunci.
 
 Rancangan lengkap ada di `tuning_grids/` (`.md` untuk penalaran, `.csv` siap
 dimuat notebook 04).
+
+**RM-c punya dua lapis.** Standar: fusi linear di atas head juara RM-b
+(`RMC_TUNING_GRID.csv`, 66 konfigurasi). Eksplorasi: SEMUA head RM-b x lima rumus
+fusi x k (`RMC_EXPLORATION_GRID.csv`, 133 konfigurasi per head). Penantang hasil
+eksplorasi hanya menggantikan juara standar bila selisihnya melampaui ambang seri
+DAN lolos bootstrap berpasangan di validation; dengan ribuan kandidat, pemenang
+mentah rawan bias seleksi. RM-c tidak melatih apa pun, tetapi biayanya adalah biaya
+head yang dipakainya (bukan nol) ditambah retrieval saat inferensi.
 
 ## Dataset
 

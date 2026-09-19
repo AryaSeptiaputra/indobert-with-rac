@@ -63,6 +63,74 @@ def softmax(logits: np.ndarray, axis: int = -1) -> np.ndarray:
     return exponentiated / exponentiated.sum(axis=axis, keepdims=True)
 
 
+class NeighborCache:
+    """Tetangga terdekat per split query, dihitung sekali lalu dipotong per k.
+
+    Retrieval hanya bergantung pada embedding, bukan pada head, sehingga seluruh
+    head dan seluruh konfigurasi fusi yang memakai split yang sama bisa berbagi
+    satu hasil pencarian. FAISS flat mengembalikan tetangga terurut menurun,
+    jadi k tetangga pertama dari hasil untuk `max_k` sama dengan pencarian
+    langsung dengan k itu.
+
+    Hasil disimpan per NAMA split; pemanggil bertanggung jawab memakai nama yang
+    sama hanya untuk embedding query yang sama.
+
+    Args:
+        train_embeddings: Array (N, H) embedding split train.
+        train_labels: Array (N,) label yang selaras dengan embedding.
+        max_k: k terbesar yang akan diminta.
+
+    Raises:
+        ValueError: Kalau embedding kosong, tidak selaras dengan label, atau
+            `max_k` bukan bilangan positif.
+    """
+
+    def __init__(
+        self,
+        train_embeddings: np.ndarray,
+        train_labels: np.ndarray,
+        max_k: int,
+    ) -> None:
+        self.max_k = int(max_k)
+        self._classifier = RACClassifier(k=self.max_k).fit(train_embeddings, train_labels)
+        self._train_labels = np.asarray(train_labels)
+        self._neighbors: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+
+    @property
+    def index_size(self) -> int:
+        """Jumlah vektor train di dalam indeks."""
+        return self._classifier.index_size
+
+    def neighbors(
+        self,
+        split: str,
+        query_embeddings: np.ndarray,
+        k: int,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Ambil k tetangga terdekat untuk satu split query.
+
+        Args:
+            split: Nama split, kunci cache.
+            query_embeddings: Array (N, H); hanya dipakai saat split belum ada di cache.
+            k: Jumlah tetangga; tidak boleh melebihi `max_k`.
+
+        Returns:
+            Tuple (similarities (N, k), neighbor_labels (N, k)).
+
+        Raises:
+            ValueError: Kalau `k` di luar [1, max_k].
+        """
+        if not 1 <= k <= self.max_k:
+            raise ValueError(f"k={k} di luar rentang cache [1, {self.max_k}]")
+
+        if split not in self._neighbors:
+            similarities, indices = self._classifier.retrieve(query_embeddings)
+            self._neighbors[split] = (similarities, self._train_labels[indices])
+
+        similarities, neighbor_labels = self._neighbors[split]
+        return similarities[:, :k], neighbor_labels[:, :k]
+
+
 class RACClassifier:
     """Klasifikator RAC: indeks FAISS atas embedding train plus fusi probabilitas.
 

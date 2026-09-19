@@ -9,7 +9,7 @@ import torch
 from src.models.heads import build_head
 from src.models.schemas import RMBConfig
 from src.services.fusion_ablation import FusionFormulaComparator, FusionFormulaConfig
-from src.services.rac import RACClassifier, l2_normalize, softmax
+from src.services.rac import NeighborCache, RACClassifier, l2_normalize, softmax
 from src.services.training import RMBTrainer
 
 
@@ -216,3 +216,95 @@ class TestRunAll:
         for column in ("val_f1_macro", "val_f1_judi", "val_accuracy", "eval_time_s", "index_vectors"):
             assert column in results.columns
         assert results["val_f1_macro"].between(0.0, 1.0).all()
+
+
+class TestFusiLinear:
+    def test_sama_persis_dengan_rmc_evaluator_produksi(
+        self, comparator: FusionFormulaComparator, trained_head, feature_set, cpu_device
+    ) -> None:
+        from src.models.schemas import RMCConfig
+        from src.services.training import RMCEvaluator
+
+        _, production = RMCEvaluator(feature_set, trained_head, cpu_device).evaluate(
+            RMCConfig(alpha=0.3, k=5, weighting="similarity")
+        )
+        _, explored = comparator.evaluate(FusionFormulaConfig("linear", alpha=0.3, k=5))
+        np.testing.assert_array_equal(explored["preds"], production["preds"])
+        np.testing.assert_allclose(explored["p_judi"], production["p_judi"], rtol=1e-6)
+
+    def test_alpha_nol_sama_dengan_head_sendiri(
+        self, comparator: FusionFormulaComparator, trained_head, feature_set
+    ) -> None:
+        _, extras = comparator.evaluate(FusionFormulaConfig("linear", alpha=0.0, k=5))
+        with torch.no_grad():
+            expected = trained_head(torch.tensor(feature_set.embeddings["val"])).argmax(1).numpy()
+        np.testing.assert_array_equal(extras["preds"], expected)
+
+    def test_tanpa_alpha_ditolak(self, comparator: FusionFormulaComparator) -> None:
+        with pytest.raises(ValueError, match="alpha"):
+            comparator.evaluate(FusionFormulaConfig("linear"))
+
+
+class TestKonfigurasiMengaturRetrieval:
+    def test_k_berbeda_memberi_retrieval_berbeda(self, feature_set, trained_head, cpu_device) -> None:
+        comparator = FusionFormulaComparator(feature_set, trained_head, cpu_device, k=20)
+        small = comparator.evaluate(FusionFormulaConfig("rumus2", k=1))[1]
+        large = comparator.evaluate(FusionFormulaConfig("rumus2", k=20))[1]
+        assert not np.array_equal(small["alpha_used"], large["alpha_used"])
+
+    def test_k_melebihi_cache_ditolak(self, comparator: FusionFormulaComparator) -> None:
+        with pytest.raises(ValueError, match="di luar rentang"):
+            comparator.evaluate(FusionFormulaConfig("rumus2", k=50))
+
+    def test_cache_bersama_tidak_dibangun_ulang(self, feature_set, trained_head, cpu_device) -> None:
+        train_emb, train_lab = feature_set["train"]
+        shared = NeighborCache(train_emb, train_lab, max_k=10)
+        first = FusionFormulaComparator(feature_set, trained_head, cpu_device, retrieval=shared)
+        second = FusionFormulaComparator(feature_set, trained_head, cpu_device, retrieval=shared)
+        first.evaluate(FusionFormulaConfig("rumus3", k=5))
+        second.evaluate(FusionFormulaConfig("rumus3", k=10))
+        assert first._fit_retrieval() is second._fit_retrieval() is shared
+
+    def test_weighting_dari_konfigurasi_dipakai(self, comparator: FusionFormulaComparator) -> None:
+        similarities = np.array([[0.9, 0.1, 0.1]], dtype=np.float32)
+        neighbours = np.array([[1, 0, 0]])
+        uniform = comparator.raw_retrieval_scores(similarities, neighbours, 2, weighting="uniform")
+        weighted = comparator.raw_retrieval_scores(similarities, neighbours, 2, weighting="similarity")
+        np.testing.assert_allclose(uniform, [[2.0, 1.0]])
+        np.testing.assert_allclose(weighted, [[0.2, 0.9]], rtol=1e-6)
+
+
+class TestFuseDanSkorPositif:
+    def test_fuse_memberi_prediksi_yang_sama_dengan_evaluate(
+        self, comparator: FusionFormulaComparator, feature_set
+    ) -> None:
+        config = FusionFormulaConfig("rumus3", k=5)
+        similarities, neighbor_labels = comparator._fit_retrieval().neighbors(
+            "val", feature_set.embeddings["val"], 5
+        )
+        scores, _ = comparator.fuse(
+            config, comparator._head_logits("val"), similarities, neighbor_labels
+        )
+        _, extras = comparator.evaluate(config)
+        np.testing.assert_array_equal(scores.argmax(axis=1), extras["preds"])
+
+    def test_skor_positif_rumus1_tetap_di_rentang_probabilitas(self) -> None:
+        scores = np.array([[3.0, -1.0], [-2.0, 4.0]], dtype=np.float32)
+        positive = FusionFormulaComparator.to_positive_score("rumus1", scores)
+        assert ((positive > 0) & (positive < 1)).all()
+        assert positive[1] > positive[0]
+
+    def test_skor_positif_rumus_probabilitas_apa_adanya(self) -> None:
+        probabilities = np.array([[0.7, 0.3], [0.2, 0.8]], dtype=np.float32)
+        np.testing.assert_allclose(
+            FusionFormulaComparator.to_positive_score("linear", probabilities), [0.3, 0.8], rtol=1e-6
+        )
+
+
+class TestRunAllDenganLinear:
+    def test_linear_alpha_menambah_satu_baris_pembanding(
+        self, comparator: FusionFormulaComparator
+    ) -> None:
+        results = comparator.run_all(split="val", rumus4_alphas=(0.2,), linear_alpha=0.3)
+        assert results["formula"].tolist()[0] == "linear"
+        assert len(results) == 1 + 3 + 1

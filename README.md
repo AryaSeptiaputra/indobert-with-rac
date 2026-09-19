@@ -63,7 +63,9 @@ IndoBERT-with-RAC/
 │   │   ├── data.py            # ExperimentData (split + tokenizer + class weight)
 │   │   ├── features.py        # FeatureExtractor, cache embedding beku
 │   │   ├── training.py        # RMATrainer, RMBTrainer, RMCEvaluator
-│   │   ├── rac.py             # RACClassifier (FAISS + fusi probabilitas)
+│   │   ├── rac.py             # RACClassifier, NeighborCache (FAISS + fusi probabilitas)
+│   │   ├── fusion_ablation.py # Rumus fusi RAC: linear produksi dan Rumus 1-4
+│   │   ├── rmc_exploration.py # Eksplorasi RM-c: seluruh head RM-b x seluruh rumus fusi
 │   │   ├── evaluation.py      # ClassificationEvaluator, EfficiencyProfiler
 │   │   ├── campaign.py        # CampaignRunner (orkestrasi run dan benchmark)
 │   │   ├── run_log.py         # RunLogger, HistoryWriter, BestTracker
@@ -121,6 +123,7 @@ Seluruh pipeline dijalankan dari notebook, berurutan:
 ```
 01_eda → 02_preprocessing → 03a_rma → 03b_rmb → 03c_rmc
        → 04_tuning_campaign → 05_final_benchmark → 06_analysis_export
+                (RM-a → RM-b → RM-c standar → RM-c eksplorasi, satu sesi)
 ```
 
 | Notebook | Isi |
@@ -129,13 +132,19 @@ Seluruh pipeline dijalankan dari notebook, berurutan:
 | `02_preprocessing.ipynb` | Membangun split 70:15:15 beserta gate reproduktibilitas |
 | `03a_rma_finetune.ipynb` | Baseline RM-a, satu konfigurasi |
 | `03b_rmb_frozen.ipynb` | Baseline RM-b, ekstraksi fitur beku |
-| `03c_rmc_rac.ipynb` | Baseline RM-c, sweep alpha |
-| `04_tuning_campaign.ipynb` | Kampanye grid ketiga skenario |
+| `03c_rmc_rac.ipynb` | Baseline RM-c, sweep alpha, dan pembanding empat rumus fusi di satu head |
+| `04_tuning_campaign.ipynb` | Kampanye grid ketiga skenario, ditambah eksplorasi RM-c (seluruh head RM-b x seluruh rumus fusi) dan putusan juara RM-c |
 | `05_final_benchmark.ipynb` | Split test dan benchmark inferensi, satu sesi |
 | `06_analysis_export.ipynb` | Biaya FAISS, penggabungan riwayat, ekspor Excel |
 
 Jangan lewati `02_preprocessing.ipynb`: seluruh notebook model bergantung pada
 keluarannya.
+
+03a sampai 03c adalah pengantar dan baseline satu konfigurasi per skenario;
+keluarannya ke `outputs/baseline/` dan tidak dibaca notebook lain. Yang
+menentukan hasil Bab 4 adalah 04 (tuning) lalu 05 (benchmark final). Tahap
+RM-b di 04 menyimpan state SETIAP head di `checkpoints/rmb_heads/`, karena
+eksplorasi RM-c di 04 menguji RAC di atas seluruh head itu.
 
 Menjalankan test:
 
@@ -182,6 +191,13 @@ sebelum fusi, dan tidak pernah setelahnya: kedua masukan sudah berupa distribusi
 dan bobot fusinya berjumlah satu, sehingga hasilnya sudah sah. Softmax kedua akan
 meratakan selisih dan bisa mengubah argmax pada kasus nyaris seri. Fusi level
 probabilitas dan level logit tidak ekuivalen.
+
+Itu fusi linear-konveks, rumus produksi RM-c standar. Eksplorasi RM-c di 04
+menguji empat rumus alternatif di seluruh head RM-b (`fusion_ablation.py`): fusi
+level skor (Long dkk., 2022), dua varian alpha adaptif per sampel, dan geometric
+pooling. Rumus fusi juara dicatat di `best.json` dan `checkpoints/rmc_best.pt`;
+bila juara bukan fusi linear, Bab 4 harus menyatakan rumusnya, karena fusi level
+skor dan geometric pooling tidak mengikuti aturan "softmax sekali" di atas.
 
 ---
 

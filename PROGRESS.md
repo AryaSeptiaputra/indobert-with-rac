@@ -39,7 +39,7 @@ Yang sudah terverifikasi:
 - Smoke run ujung ke ujung di RTX 3050 (subset kecil): RM-a → RM-b → RM-c →
   benchmark final berjalan dan menghasilkan 19 figur, 3 tabel metrik, dan 3
   checkpoint.
-- `pytest`: 243 test lulus, sekitar 50 detik, tanpa GPU.
+- `pytest`: 353 test lulus, tanpa GPU.
 
 ## Dataset
 
@@ -117,6 +117,39 @@ menghasilkan confusion matrix yang persis sama atas 1.402 sampel validation.
 Implikasinya untuk Bab 4: pergeseran F1 antar hardware ternyata jauh lebih kecil
 daripada dugaan awal (0,1-0,5 pp), tetapi konfigurasi pemenang tetap harus
 ditentukan ulang dari kampanye lokal, bukan disalin dari arsip.
+
+## Redesain alur RM-c (2026-09-19, branch `vast.ai`)
+
+Kampanye RM-c dulu hanya menguji RAC di atas head juara RM-b. Alurnya sekarang dua
+lapis, semuanya di `04_tuning_campaign.ipynb`:
+
+1. **RM-c standar** (tidak berubah): fusi linear di atas head juara RM-b,
+   `RMC_TUNING_GRID.csv`, 66 konfigurasi.
+2. **Eksplorasi RM-c** (baru, bagian 6): SEMUA head RM-b x lima rumus fusi (linear
+   produksi, Rumus 1 sampai 4) x k, `RMC_EXPLORATION_GRID.csv`, 133 konfigurasi per
+   head (3.591 evaluasi untuk 27 head). Rancangannya di
+   `tuning_grids/RMC_EXPLORATION_GRID.md`. Validation saja; test tidak dibuka.
+3. **Putusan juara:** penantang hasil eksplorasi menggantikan juara standar hanya
+   bila selisihnya melampaui ambang seri 0,15 pp DAN lolos bootstrap berpasangan.
+   Bila menang, `rmc_best.pt` memuat head dan rumus fusinya, dan
+   `05_final_benchmark.ipynb` memuat RM-c dari sana.
+
+Notebook 03c2 dan 03c3 dilebur: 03c sekarang pengantar satu head (baseline, sweep alpha,
+pembanding empat rumus fusi), setara pola 03a dan 03b. Tahap RM-b menyimpan state
+SETIAP head di `checkpoints/rmb_heads/`. Biaya RM-c di `success_criteria` dan
+`final_comparison` sekarang biaya head yang dipakainya, bukan nol.
+
+**Status:** kode, test (353 lulus), grid, dan notebook sudah siap. Eksplorasi BELUM
+dijalankan di kampanye resmi; angka Bab 4 tetap yang di `best.json`. Untuk menjalankan
+di kampanye Vast.ai yang ada: buka `04_tuning_campaign.ipynb` bagian 6, jalankan
+`runner.restore_rmb_heads()` (melatih ulang head yang belum tersimpan; di RTX 3090 yang
+sama dengan kampanye asli hasilnya seharusnya identik, dan peringatan muncul bila selisih
+> 0,05 pp dari `runs_rmb.csv`), lalu `explore_rmc` dan `decide_rmc_champion`.
+
+Uji kelayakan di mesin lokal (RTX 3050, folder sementara, BUKAN hasil resmi): eksplorasi
+3.591 evaluasi selesai dalam 36 detik; fusi linear unggul di 25 dari 27 head; penantang
+teratas (head run 25, linear alpha=0,4 k=1) selisih +0,11 pp dengan interval bootstrap
+[-0,60, +0,81] pp, sehingga juara standar tetap.
 
 ## Langkah berikutnya
 

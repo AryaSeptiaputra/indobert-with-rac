@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from src.services.rac import RACClassifier, l2_normalize, softmax
+from src.services.rac import NeighborCache, RACClassifier, l2_normalize, softmax
 
 
 class TestUtilitasNumerik:
@@ -165,3 +165,44 @@ class TestRACClassifier:
                 rng.normal(size=(10, 8)).astype(np.float32),
                 softmax(rng.normal(size=(5, 2))),
             )
+
+
+class TestNeighborCache:
+    @pytest.fixture
+    def corpus(self, rng):
+        return rng.normal(size=(80, 8)).astype(np.float32), rng.integers(0, 2, 80)
+
+    def test_potongan_sama_dengan_pencarian_langsung_dengan_k_itu(self, corpus, rng) -> None:
+        embeddings, labels = corpus
+        queries = rng.normal(size=(12, 8)).astype(np.float32)
+        cache = NeighborCache(embeddings, labels, max_k=20)
+
+        similarities, neighbor_labels = cache.neighbors("val", queries, k=5)
+        direct = RACClassifier(k=5).fit(embeddings, labels)
+        direct_sims, direct_idx = direct.retrieve(queries)
+
+        np.testing.assert_allclose(similarities, direct_sims, rtol=1e-6)
+        np.testing.assert_array_equal(neighbor_labels, labels[direct_idx])
+
+    def test_pencarian_hanya_sekali_per_split(self, corpus, rng) -> None:
+        embeddings, labels = corpus
+        cache = NeighborCache(embeddings, labels, max_k=10)
+        first = cache.neighbors("val", rng.normal(size=(6, 8)).astype(np.float32), k=3)
+
+        # Embedding berbeda dengan nama split sama tidak dihitung ulang: kunci cache
+        # adalah nama split, dan itu memang kontraknya.
+        second = cache.neighbors("val", rng.normal(size=(6, 8)).astype(np.float32), k=3)
+        np.testing.assert_array_equal(first[1], second[1])
+
+    def test_k_di_luar_rentang_ditolak(self, corpus, rng) -> None:
+        embeddings, labels = corpus
+        cache = NeighborCache(embeddings, labels, max_k=5)
+        queries = rng.normal(size=(3, 8)).astype(np.float32)
+        with pytest.raises(ValueError, match="di luar rentang"):
+            cache.neighbors("val", queries, k=6)
+        with pytest.raises(ValueError, match="di luar rentang"):
+            cache.neighbors("val", queries, k=0)
+
+    def test_ukuran_indeks_sama_dengan_jumlah_train(self, corpus) -> None:
+        embeddings, labels = corpus
+        assert NeighborCache(embeddings, labels, max_k=3).index_size == 80

@@ -15,6 +15,7 @@ import torch
 from src.services.campaign import CampaignRunner
 from src.services.data import ExperimentData
 from src.services.features import FeatureSet
+from src.services.fusion_ablation import FusionFormulaConfig
 
 
 @pytest.fixture
@@ -233,3 +234,218 @@ class TestResume:
         runner.run_batch("rmb", [{"config": {"epochs": e}} for e in (1, 2)])
         lanjutan = runner.run_batch("rmb", [{"config": {"epochs": e}} for e in (1, 2, 3)])
         assert lanjutan.loc[0, "run_id"] == 3
+
+
+EXPLORATION_GRID = [
+    FusionFormulaConfig("linear", alpha=0.0, k=1),
+    FusionFormulaConfig("linear", alpha=0.3, k=5),
+    FusionFormulaConfig("rumus1", k=5),
+    FusionFormulaConfig("rumus2", k=5),
+    FusionFormulaConfig("rumus3", k=5),
+    FusionFormulaConfig("rumus4", alpha=0.3, k=5),
+]
+
+
+@pytest.fixture
+def explored(runner):
+    """Tiga head RM-b, satu run RM-c standar, lalu eksplorasi di atas ketiga head."""
+    runner.run_batch(
+        "rmb",
+        [
+            {"config": {"epochs": 2}},
+            {"config": {"head_arch": "mlp", "hidden_dim": 16, "epochs": 2}},
+            {"config": {"head_arch": "mlp", "hidden_dim": 32, "epochs": 3}},
+        ],
+    )
+    runner.run("rmc", {"alpha": 0.2, "k": 5})
+    return runner.explore_rmc(EXPLORATION_GRID)
+
+
+class TestHeadRMBTersimpan:
+    def test_setiap_run_menyimpan_state_head_bukan_hanya_juara(self, runner, tmp_path) -> None:
+        runner.run_batch("rmb", [{"config": {"epochs": 1}}, {"config": {"epochs": 2}}])
+        for run_id in (1, 2):
+            assert (tmp_path / "checkpoints" / "rmb_heads" / f"run_{run_id}.pt").exists()
+
+    def test_isi_state_head_sama_dengan_checkpoint_juara(self, runner, tmp_path) -> None:
+        runner.run("rmb", {"epochs": 2})
+        heads = torch.load(
+            tmp_path / "checkpoints" / "rmb_heads" / "run_1.pt", map_location="cpu", weights_only=True
+        )
+        champion = torch.load(
+            tmp_path / "checkpoints" / "rmb_best.pt", map_location="cpu", weights_only=True
+        )
+        assert heads["run_id"] == champion["run_id"] == 1
+        for key, value in champion["head_state"].items():
+            torch.testing.assert_close(heads["head_state"][key], value)
+
+    def test_pemulihan_melatih_ulang_hanya_head_yang_belum_ada(self, runner, tmp_path) -> None:
+        runner.run_batch("rmb", [{"config": {"epochs": 2}}, {"config": {"epochs": 2, "lr": 1e-3}}])
+        (tmp_path / "checkpoints" / "rmb_heads" / "run_2.pt").unlink()
+
+        assert runner.restore_rmb_heads() == [2]
+        assert (tmp_path / "checkpoints" / "rmb_heads" / "run_2.pt").exists()
+        assert runner.restore_rmb_heads() == []
+
+    def test_pemulihan_mereproduksi_head_pada_mesin_yang_sama(self, runner, tmp_path) -> None:
+        row = runner.run("rmb", {"epochs": 3})
+        (tmp_path / "checkpoints" / "rmb_heads" / "run_1.pt").unlink()
+        runner.restore_rmb_heads()
+
+        restored = runner._load_rmb_head(1)
+        with torch.no_grad():
+            logits = restored(torch.tensor(runner.features.embeddings["val"]))
+        from src.services.evaluation import ClassificationEvaluator
+
+        metrics = ClassificationEvaluator().metrics(
+            runner.features.labels["val"], logits.argmax(1).numpy()
+        )
+        assert metrics["f1_macro"] == pytest.approx(row["val_f1_macro"], abs=1e-5)
+
+    def test_pemulihan_tanpa_riwayat_rmb_ditolak(self, runner) -> None:
+        with pytest.raises(RuntimeError, match="runs_rmb.csv kosong"):
+            runner.restore_rmb_heads()
+
+
+class TestEksplorasiRMC:
+    def test_seluruh_head_dan_konfigurasi_diuji(self, explored) -> None:
+        assert len(explored["runs"]) == 3 * len(EXPLORATION_GRID)
+        assert len(explored["per_head"]) == 3
+        assert set(explored["per_formula"]["formula"]) == {
+            "linear", "rumus1", "rumus2", "rumus3", "rumus4",
+        }
+
+    def test_hasil_ditulis_ke_folder_eksplorasi(self, explored, tmp_path) -> None:
+        for name in ("runs", "per_head", "per_formula"):
+            assert (tmp_path / "rmc_exploration" / f"rmc_exploration_{name}.csv").exists()
+
+    def test_tidak_menyentuh_riwayat_rmc_standar_dan_juara(self, runner, tmp_path) -> None:
+        runner.run("rmb", {"epochs": 2})
+        runner.run("rmc", {"alpha": 0.2, "k": 5})
+        history_before = (tmp_path / "runs_rmc.csv").read_text(encoding="utf-8")
+        best_before = (tmp_path / "best.json").read_text(encoding="utf-8")
+
+        runner.explore_rmc(EXPLORATION_GRID)
+
+        assert (tmp_path / "runs_rmc.csv").read_text(encoding="utf-8") == history_before
+        assert (tmp_path / "best.json").read_text(encoding="utf-8") == best_before
+
+    def test_head_belum_tersimpan_diminta_dipulihkan(self, runner, tmp_path) -> None:
+        runner.run("rmb", {"epochs": 1})
+        (tmp_path / "checkpoints" / "rmb_heads" / "run_1.pt").unlink()
+        with pytest.raises(FileNotFoundError, match="restore_rmb_heads"):
+            runner.explore_rmc(EXPLORATION_GRID)
+
+    def test_tanpa_riwayat_rmb_ditolak(self, runner) -> None:
+        with pytest.raises(RuntimeError, match="runs_rmb.csv kosong"):
+            runner.explore_rmc(EXPLORATION_GRID)
+
+    def test_split_test_tidak_dibuka(self, explored) -> None:
+        assert not any(column.startswith("test_") for column in explored["runs"].columns)
+
+
+class TestPutusanJuaraRMC:
+    def test_tanpa_juara_standar_ditolak(self, runner, explored) -> None:
+        (runner.out_dir / "best.json").write_text("{}", encoding="utf-8")
+        runner.best.data = {}
+        with pytest.raises(RuntimeError, match="juara RM-c standar belum ada"):
+            runner.decide_rmc_champion(explored["runs"])
+
+    def test_penantang_kalah_membiarkan_juara_standar(self, runner, explored, tmp_path, monkeypatch) -> None:
+        monkeypatch.setattr("src.services.campaign.challenger_wins", lambda *args, **kwargs: False)
+        best_before = (tmp_path / "best.json").read_text(encoding="utf-8")
+
+        decision = runner.decide_rmc_champion(explored["runs"])
+
+        assert decision["winner"] == "standar"
+        assert (tmp_path / "best.json").read_text(encoding="utf-8") == best_before
+        assert (tmp_path / "rmc_exploration" / "champion_decision.json").exists()
+
+    def test_penantang_menang_mengganti_juara_dan_membawa_head_sendiri(
+        self, runner, explored, tmp_path, monkeypatch
+    ) -> None:
+        monkeypatch.setattr("src.services.campaign.challenger_wins", lambda *args, **kwargs: True)
+
+        decision = runner.decide_rmc_champion(explored["runs"])
+
+        assert decision["winner"] == "eksplorasi"
+        champion = runner.best.get("rmc")
+        assert champion["source"] == "eksplorasi"
+        assert {"rmb_run_id", "formula", "k", "weighting"} <= set(champion["config"])
+        checkpoint = torch.load(tmp_path / "checkpoints" / "rmc_best.pt", map_location="cpu", weights_only=True)
+        assert {"head_state", "head_config", "hidden_size"} <= set(checkpoint)
+
+    def test_catatan_keputusan_memuat_selisih_dan_interval(self, runner, explored) -> None:
+        decision = runner.decide_rmc_champion(explored["runs"])
+        assert decision["winner"] in {"standar", "eksplorasi"}
+        low, high = decision["ci95_pp"]
+        assert low <= high
+        assert decision["tie_threshold_pp"] == pytest.approx(0.15)
+
+    def test_run_standar_susulan_tidak_menimpa_putusan_eksplorasi(
+        self, runner, explored, monkeypatch
+    ) -> None:
+        monkeypatch.setattr("src.services.campaign.challenger_wins", lambda *args, **kwargs: True)
+        runner.decide_rmc_champion(explored["runs"])
+
+        runner.run("rmc", {"alpha": 0.9, "k": 3})
+
+        assert runner.best.get("rmc")["source"] == "eksplorasi"
+
+
+class TestPrediktorRMC:
+    def test_juara_standar_memakai_head_juara_rmb_dan_fusi_linear(self, runner) -> None:
+        runner.run("rmb", {"epochs": 2})
+        runner.run("rmc", {"alpha": 0.2, "k": 5})
+
+        head, config = runner._load_rmc_predictor()
+
+        assert config == FusionFormulaConfig("linear", alpha=0.2, k=5, weighting="similarity")
+        expected, _ = runner._load_best_head()
+        for key, value in expected.state_dict().items():
+            torch.testing.assert_close(head.state_dict()[key], value)
+
+    def test_juara_eksplorasi_memuat_head_dan_rumusnya_sendiri(
+        self, runner, explored, monkeypatch
+    ) -> None:
+        monkeypatch.setattr("src.services.campaign.challenger_wins", lambda *args, **kwargs: True)
+        decision = runner.decide_rmc_champion(explored["runs"])
+
+        head, config = runner._load_rmc_predictor()
+
+        assert config.formula == decision["challenger"]["formula"]
+        assert config.k == decision["challenger"]["k"]
+        expected = runner._load_rmb_head(decision["challenger"]["rmb_run_id"])
+        for key, value in expected.state_dict().items():
+            torch.testing.assert_close(head.state_dict()[key], value)
+
+
+class TestBiayaEfektifRMC:
+    def test_juara_standar_dibebani_biaya_head_rmb(self, runner) -> None:
+        row = runner.run("rmb", {"epochs": 2})
+        runner.run("rmc", {"alpha": 0.2, "k": 5})
+
+        params, time_s = runner._effective_cost("rmc")
+
+        assert params == row["trainable_params"] > 0
+        assert time_s == pytest.approx(row["train_time_s"])
+
+    def test_catatan_lama_tanpa_biaya_head_memakai_juara_rmb(self, runner) -> None:
+        """best.json dari kampanye sebelum perubahan ini mencatat RM-c sebagai nol."""
+        row = runner.run("rmb", {"epochs": 2})
+        runner.best.data["rmc"] = {"run_id": 1, "val_f1_macro": 0.9, "trainable_params": 0, "train_time_s": 0.0}
+
+        assert runner._effective_cost("rmc")[0] == row["trainable_params"]
+
+    def test_juara_eksplorasi_dibebani_biaya_head_yang_dipakainya(
+        self, runner, explored, monkeypatch
+    ) -> None:
+        monkeypatch.setattr("src.services.campaign.challenger_wins", lambda *args, **kwargs: True)
+        decision = runner.decide_rmc_champion(explored["runs"])
+
+        used = explored["runs"].query("rmb_run_id == @decision['challenger']['rmb_run_id']").iloc[0]
+        assert runner._effective_cost("rmc") == (int(used["head_params"]), float(used["head_train_time_s"]))
+
+    def test_skenario_lain_memakai_catatan_juaranya_sendiri(self, runner) -> None:
+        row = runner.run("rmb", {"epochs": 2})
+        assert runner._effective_cost("rmb") == (row["trainable_params"], row["train_time_s"])

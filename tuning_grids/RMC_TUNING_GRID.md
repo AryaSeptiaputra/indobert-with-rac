@@ -7,6 +7,10 @@ terbaik (`checkpoints/rmb_best.pt`, run #28: `mlp/1024, lr=1e-3, epochs=10, wd=0
 dengan distribusi hasil retrieval FAISS (`RMCEvaluator` di `src/services/training.py`; index
 dibangun HANYA dari embedding train — anti-leakage, lihat `DATASET.md`).
 
+> **Catatan:** dokumen ini untuk **RM-c standar** (fusi linear di atas head juara RM-b).
+> Eksplorasi seluruh head RM-b dengan semua rumus fusi ada di `RMC_EXPLORATION_GRID.md`.
+> Juara eksplorasi hanya menggantikan juara standar bila lolos ambang seri dan bootstrap.
+>
 > **CSV yang tersedia** (siap diunggah lewat mode **Batch → Tempel/unggah tabel CSV**):
 > - `RMC_TUNING_GRID.csv` — 66 baris grid `alpha × k` (weighting dikunci `similarity`),
 >   tak bergantung hasil apa pun.
