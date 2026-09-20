@@ -91,7 +91,7 @@ IndoBERT-with-RAC/
 
 ## Struktur branch
 
-Repo ini punya tiga branch dengan peran berbeda, supaya angka efisiensi dari
+Repo ini punya empat branch dengan peran berbeda, supaya angka efisiensi dari
 hardware yang berbeda tidak tercampur (lihat "Aturan validitas Bab 4" di
 bawah):
 
@@ -100,6 +100,7 @@ bawah):
 | `main` | Codebase rujukan (kode saja). Tidak menyimpan hasil eksperimen apa pun — titik awal clone. |
 | `local` | Kampanye yang dijalankan di mesin lokal (RTX 3050 Laptop, 4 GB VRAM); narasinya di `PROGRESS.md`. |
 | `vast.ai` | Kampanye yang dijalankan di instance Vast.ai (RTX 3090); narasinya di `PROGRESS.md`. |
+| `google-colab` | Kampanye yang dijalankan di runtime Google Colab (GPU sesuai `hardware.json` sesi itu); narasinya di `PROGRESS.md`. |
 
 Untuk mulai kerja di instance Vast.ai:
 
@@ -109,21 +110,68 @@ cd indobert-with-rac
 git checkout vast.ai
 ```
 
+### Mulai kerja di Google Colab
+
+Pilih runtime GPU lebih dulu (Runtime, Change runtime type). Repo publik, jadi clone
+tidak butuh token. Notebook tidak diubah; setup dijalankan dari terminal Colab atau
+dari sel notebook berawalan `!`.
+
+Terminal:
+
+```bash
+git clone https://github.com/AryaSeptiaputra/indobert-with-rac.git
+cd indobert-with-rac
+git checkout google-colab
+pip install -r requirements-dev.txt
+pip install -e .
+cp .env.example .env
+```
+
+Sel notebook (`%cd` dipakai karena `!cd` tidak mengubah direktori kerja sel berikutnya):
+
+```python
+!git clone https://github.com/AryaSeptiaputra/indobert-with-rac.git
+%cd indobert-with-rac
+!git checkout google-colab
+!pip install -r requirements-dev.txt
+!pip install -e .
+!cp .env.example .env
+```
+
+Catatan:
+
+- Terminal Colab tidak dijamin tersedia di semua tier; sel `!` selalu bisa dipakai.
+- Disk runtime bersifat sementara. Clone ulang di setiap sesi baru; `git pull` hanya
+  berguna di dalam sesi yang sama. `outputs/` di-gitignore, jadi `git pull` tidak
+  menyentuh hasil run.
+- Bila `import src` gagal setelah `pip install -e .`, jalankan `%cd` ke folder repo
+  atau restart sesi (Runtime, Restart session) tanpa memasang ulang. Hal yang sama
+  berlaku bila `pip` mengganti versi numpy atau torch yang sudah termuat.
+- `requirements.txt` dikunci ke versi yang tervalidasi di Python 3.13. Bila versi
+  Python atau torch bawaan Colab berbeda, `pip install -r` bisa bentrok; catat
+  pesan galatnya alih-alih mengubah pin secara ad hoc.
+- Sesuaikan `MICRO_BATCH` di `.env` dengan VRAM GPU Colab. `DEFAULT_OUT_DIR` boleh
+  diarahkan ke path absolut di Google Drive supaya kampanye bisa dilanjutkan bila
+  sesi terputus.
+- Runtime hilang saat sesi berakhir. Sebelum itu jalankan sel "Arsipkan hasil" di
+  `06_analysis_export.ipynb`, lalu unduh `hasil_*.tar.gz` atau salin ke Drive.
+
 Checkpoint (`outputs/**/checkpoints/`) tidak ikut git, jadi di clone baru harus
 dipulihkan dengan `runner.restore_checkpoints()`; sel untuk itu sudah ada di
 `03c_rmc_rac.ipynb` dan `04_tuning_campaign.ipynb`. Menjalankan ulang 03b atau 04
 TIDAK membuat checkpoint juara kembali.
 
-Codebase (`src/`, `notebooks/`, `tests/`) identik di ketiga branch — yang
+Codebase (`src/`, `notebooks/`, `tests/`) identik di keempat branch — yang
 berbeda hanya narasi `PROGRESS.md`. Hasil run (`outputs/`) TIDAK disimpan di git:
 `runs_*.csv` dan `best.json` yang ikut ter-clone membuat kampanye baru melewati
 semua konfigurasi dan tidak menghasilkan checkpoint juara. Simpan hasil dari mesin
 tempat kampanye berjalan sebelum instance dihapus: jalankan sel "Arsipkan hasil" di
 `06_analysis_export.ipynb`, lalu unduh `hasil_*.tar.gz` yang dihasilkannya.
 Jangan gabungkan angka
-efisiensi (waktu latih, latency, peak memory) dari `local` dan `vast.ai` dalam
-satu tabel; F1-macro boleh dibandingkan lintas branch karena tidak bergantung
-hardware.
+efisiensi (waktu latih, latency, peak memory) dari `local`, `vast.ai`, dan
+`google-colab` dalam satu tabel. Di Colab, tipe GPU bisa berbeda antar sesi, jadi
+RM-a sampai `05_final_benchmark` harus berada dalam satu sesi dengan satu tipe GPU.
+F1-macro boleh dibandingkan lintas branch karena tidak bergantung hardware.
 
 ---
 

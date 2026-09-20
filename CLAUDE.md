@@ -226,12 +226,15 @@ dari tiga syarat:
 
 ## Struktur branch
 
-Repo ini punya tiga branch: `main` (codebase rujukan, tanpa data hasil run),
-`local` (kampanye di mesin lokal, RTX 3050 Laptop), dan `vast.ai` (kampanye di
-instance Vast.ai, RTX 3090). Saat bekerja di `local` atau
-`vast.ai`, Aturan #1 di atas berlaku per branch: jangan campur angka efisiensi
-dari kedua branch itu dalam satu tabel Bab 4. Codebase identik di ketiga
-branch; yang berbeda hanya narasi `PROGRESS.md`. Hasil run tidak disimpan di git.
+Repo ini punya empat branch: `main` (codebase rujukan, tanpa data hasil run),
+`local` (kampanye di mesin lokal, RTX 3050 Laptop), `vast.ai` (kampanye di
+instance Vast.ai, RTX 3090), dan `google-colab` (kampanye di runtime Google
+Colab; tipe GPU bisa berbeda antar sesi). Saat bekerja di `local`, `vast.ai`,
+atau `google-colab`, Aturan #1 di atas berlaku per branch dan per sesi: jangan
+campur angka efisiensi dari ketiga branch itu dalam satu tabel Bab 4. Di
+`google-colab`, RM-a sampai `05_final_benchmark` harus dijalankan dalam satu
+sesi dengan satu tipe GPU. Codebase identik di keempat branch; yang berbeda
+hanya narasi `PROGRESS.md`. Hasil run tidak disimpan di git.
 
 ## Status
 

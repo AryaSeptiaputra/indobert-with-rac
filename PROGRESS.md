@@ -1,7 +1,9 @@
 # PROGRESS — IndoBERT-with-RAC
 
 Status proyek skripsi ITENAS 2026 (trade-off performa versus efisiensi tiga
-strategi adaptasi IndoBERT untuk deteksi komentar judi). Terakhir diperbarui: **2026-09-02**.
+strategi adaptasi IndoBERT untuk deteksi komentar judi). Terakhir diperbarui: **2026-09-20**.
+
+Narasi branch `google-colab`: kampanye dijalankan di runtime Google Colab.
 
 ## Ringkasan tahap
 
@@ -10,21 +12,25 @@ strategi adaptasi IndoBERT untuk deteksi komentar judi). Terakhir diperbarui: **
 | EDA | Selesai | `docs/EDA_REPORT_BAGIAN1/2/3.md`, `outputs/figures/eda/` |
 | Preprocessing | Selesai | `data/processed/`, `DATASET.md` |
 | Penulisan ulang kode ke standar `writer-code` | Selesai | `src/`, `tests/`, `notebooks/` |
-| Kampanye tuning lokal (RTX 3050) | Selesai (RM-a 30, RM-b 27, RM-c 67 run) | `outputs/tuning/` |
-| Benchmark final lokal (TEST, satu sesi) | Selesai | `outputs/tuning/metrics/` |
-| Penulisan Bab 4 | Belum | menunggu angka lokal |
+| Kampanye tuning di Colab | Belum dimulai (GPU dan sesi diisi setelah `hardware.json` ada) | `outputs/tuning/` |
+| Benchmark final di Colab (TEST, satu sesi) | Belum | `outputs/tuning/metrics/` |
+| Penulisan Bab 4 | Belum | menunggu angka Colab |
 
 ## Keadaan sekarang
 
-Kode telah ditulis ulang sepenuhnya (branch `rewrite/writer-code-standard`) dan
-seluruh training dipindahkan dari Vast.ai ke mesin lokal. Kampanye lama di RTX
-3090 **tidak lagi dipakai untuk Bab 4**. Kampanye lokal (RTX 3050) sudah selesai
-dan terverifikasi bebas cacat (2026-09-05): RM-a 30 run, RM-b 27 run, RM-c 67
-run, tanpa error/NaN/duplikat, kriteria sukses RM-b dan RM-c 3/3 terpenuhi.
-`outputs/_archive_vast*/` dan `outputs/combined/` (turunan arsip) sudah
-dihapus.
+Branch `google-colab` dibuat pada 2026-09-20 dari branch `vast.ai` (commit `d42e71d`)
+untuk kampanye di Google Colab. Codebase identik dengan branch lain; yang berbeda hanya
+narasi ini. Hasil run tidak disimpan di git (lihat bagian di bawah): amankan dengan sel
+"Arsipkan hasil" di `06_analysis_export.ipynb`, lalu unduh `hasil_*.tar.gz` atau salin
+ke Google Drive sebelum runtime terputus. Cara memulai sesi Colab ada di `README.md`,
+bagian "Mulai kerja di Google Colab".
 
-Yang sudah terverifikasi:
+Angka kampanye di branch `local` (RTX 3050) dan `vast.ai` (RTX 3090) tidak dipakai di
+branch ini. Angka efisiensi hanya sah dari satu sesi dan satu tipe GPU; tipe GPU Colab
+bisa berbeda antar sesi, jadi RM-a sampai `05_final_benchmark` dijalankan dalam satu
+sesi.
+
+Yang sudah terverifikasi di codebase (tidak bergantung hardware):
 
 - Split `train/val/test` dan `data_clean.csv` yang dihasilkan kode baru
   **byte-identical** dengan yang dipakai seluruh eksperimen sebelumnya, dan
@@ -36,9 +42,6 @@ Yang sudah terverifikasi:
   seluruh kurva `train_loss` per epoch.
 - RM-a memuat **109.485.314** trainable parameter dan `MLPHead(768, 1024)`
   memuat **789.506**, keduanya cocok dengan angka yang dikutip sebelumnya.
-- Smoke run ujung ke ujung di RTX 3050 (subset kecil): RM-a → RM-b → RM-c →
-  benchmark final berjalan dan menghasilkan 19 figur, 3 tabel metrik, dan 3
-  checkpoint.
 - `pytest`: 409 test lulus, tanpa GPU.
 
 ## Dataset
@@ -52,73 +55,13 @@ train 6.588 / val 1.402 / test 1.405 (total 9.395, sekitar 18% kelas judi, rasio
 Model dasar `indobenchmark/indobert-base-p2`, `max_length` 128, special token
 `[URL]`, `[MENTION]`, `[NUM]`.
 
-## Kalibrasi kampanye lokal (2026-09-02)
+## Kalibrasi biaya
 
-**Hardware:** RTX 3050 Laptop, 4 GB VRAM, 16 SM, 16 core CPU.
+Kalibrasi RTX 3050 dan perbandingannya dengan RTX 3090 ada di `PROGRESS.md` branch
+`local`. Tidak dipakai di sini karena bergantung pada hardware lain. Biaya di Colab
+diukur lewat sel "Kalibrasi biaya" di `04_tuning_campaign.ipynb`.
 
-Satu run RM-a penuh dengan baseline kanonik (`lr=2e-5, epochs=5, batch=16,
-warmup=0,1, wd=0,01`) sudah dijalankan dan tercatat sebagai run #1 di
-`outputs/tuning/`, sehingga bukan sekadar uji coba melainkan sel pertama grid.
-
-| Ukuran | Nilai |
-|---|---|
-| val F1-macro | 0,974873 |
-| val F1 judi | 0,958904 |
-| Epoch terbaik | 3 dari 5 |
-| Waktu latih | 1.101 s (18,4 menit) |
-| Peak GPU memory | 2.339 MB dari 4.096 MB |
-| micro_batch x akumulasi | 8 x 2 |
-| Trainable params | 109.485.314 |
-
-**Memori aman.** Sisa 1.757 MB pada `micro_batch=8`. Kampanye 3090 memakai
-`micro_batch=16` dengan puncak 2.309 MB, jadi 16 pun muat di kartu ini dan
-memberi utilisasi GPU lebih baik.
-
-**Tetapi `micro_batch` bukan knob bebas.** Rumus gradien akumulasi memang
-ekuivalen dengan batch besar, tetapi run-nya tidak: `DataLoader` dengan ukuran
-batch berbeda mengonsumsi RNG berbeda, sehingga mask dropout dan komposisi batch
-ikut berubah. Terbukti dari tiga run berkonfigurasi sama di riwayat: run #1 dan
-#2 (`micro_batch` efektif 8) memberi kurva yang IDENTIK seluruhnya, sedangkan
-run #3 (efektif 16) memberi kurva berbeda dan F1-macro 0,977266 versus 0,974873.
-Artinya training deterministik terhadap seed, tetapi `micro_batch` adalah bagian
-identitas konfigurasi. Grid RM-a mengunci `micro_batch = 32` (efektif 16 pada
-batch 16), dan nilai itu tidak boleh berubah di tengah kampanye.
-
-**Biaya sebenarnya jauh di atas perkiraan awal.** Estimasi 5x perlambatan
-berdasarkan rasio SM dan bandwidth ternyata keliru: pengukuran memberi **7,7x**
-untuk konfigurasi yang sama (143,2 s di 3090 versus 1.101 s di 3050). Proyeksi
-yang berlaku:
-
-| Skenario | Run | Perkiraan di 3050 |
-|---|---|---|
-| RM-a | 26 | sekitar 8 jam |
-| RM-b | 31 | sekitar 30-45 menit |
-| RM-c | 67 | beberapa menit |
-
-Kampanye RM-a perlu dijalankan semalam, bukan beberapa jam.
-
-### Perbandingan dengan run berkonfigurasi sama di RTX 3090
-
-| | RTX 3090 (arsip) | RTX 3050 (lokal) |
-|---|---|---|
-| val F1-macro | 0,974873 | 0,974873 |
-| val F1 judi | 0,958904 | 0,958904 |
-| val accuracy | 0,985021 | 0,985021 |
-| Epoch terbaik | 5 | 3 |
-| Waktu latih | 143,2 s | 1.101,0 s |
-| micro_batch x akumulasi | 16 x 1 | 8 x 2 |
-
-Metrik puncaknya sama sampai enam desimal, tetapi ini **bukan** reproduksi
-bit-identical: kurva per-epoch keduanya berbeda (mis. epoch 1 memberi F1-macro
-0,9584 versus 0,9398), dan nilai terbaik itu kebetulan dicapai pada epoch yang
-berbeda. Yang terjadi adalah kedua model, pada epoch terbaiknya masing-masing,
-menghasilkan confusion matrix yang persis sama atas 1.402 sampel validation.
-
-Implikasinya untuk Bab 4: pergeseran F1 antar hardware ternyata jauh lebih kecil
-daripada dugaan awal (0,1-0,5 pp), tetapi konfigurasi pemenang tetap harus
-ditentukan ulang dari kampanye lokal, bukan disalin dari arsip.
-
-## Redesain alur RM-c (2026-09-19, branch `vast.ai`)
+## Redesain alur RM-c (2026-09-19, dari branch `vast.ai`)
 
 Kampanye RM-c dulu hanya menguji RAC di atas head juara RM-b. Alurnya sekarang dua
 lapis, semuanya di `04_tuning_campaign.ipynb`:
@@ -140,15 +83,13 @@ SETIAP head di `checkpoints/rmb_heads/`. Biaya RM-c di `success_criteria` dan
 `final_comparison` sekarang biaya head yang dipakainya, bukan nol.
 
 **Status:** kode, test (409 lulus), grid, dan notebook sudah siap. Eksplorasi BELUM
-dijalankan di kampanye resmi; angka Bab 4 tetap yang di `best.json`. Untuk menjalankan
-di kampanye Vast.ai yang ada: jalankan `04_tuning_campaign.ipynb` dari atas. Sel
-`runner.restore_checkpoints(include_rma=True)` (sebelum bagian 5) memulihkan head RM-b,
-`rmb_best.pt`, `rmc_best.pt`, dan `rma_best.pt` dari konfigurasi di `best.json`; di RTX
-3090 yang sama dengan kampanye asli hasilnya seharusnya identik, dan peringatan muncul
-bila selisih > 0,05 pp dari catatan. Lalu `explore_rmc` dan `decide_rmc_champion`.
-Checkpoint tidak ikut git, dan menjalankan ulang skenario tidak membuat checkpoint
-juara kembali karena F1 yang sama tidak dipromosikan (2026-09-20: 03c gagal dengan
-`rmb_best.pt tidak ada` di instance baru).
+dijalankan di kampanye resmi Colab. Untuk menjalankannya: jalankan `04_tuning_campaign.ipynb`
+dari atas dalam satu sesi. Kampanye baru di runtime baru menjalankan RM-a, lalu RM-b (yang
+menyimpan state setiap head di `checkpoints/rmb_heads/`), lalu RM-c standar dan eksplorasi
+(`explore_rmc`, `decide_rmc_champion`). Sel `runner.restore_checkpoints(include_rma=True)`
+hanya diperlukan bila `outputs/` dipulihkan dari arsip di sesi lanjutan, karena checkpoint
+tidak ikut git dan menjalankan ulang skenario tidak membuat checkpoint juara kembali
+(F1 yang sama tidak dipromosikan).
 
 Uji kelayakan di mesin lokal (RTX 3050, folder sementara, BUKAN hasil resmi): eksplorasi
 3.591 evaluasi selesai dalam 36 detik; fusi linear unggul di 25 dari 27 head; penantang
@@ -190,7 +131,14 @@ untuk diunduh sebelum instance dihancurkan.
 
 ## Langkah berikutnya
 
-1. Tulis Bab 4 dari angka di `outputs/tuning/` (`final_comparison.csv`,
+1. Di runtime Colab: siapkan lingkungan (`README.md`, "Mulai kerja di Google Colab"),
+   pilih runtime GPU, lalu jalankan `02_preprocessing.ipynb` sampai gate checksum isi
+   lolos.
+2. Jalankan `04_tuning_campaign.ipynb` dari atas dalam satu sesi, lalu
+   `05_final_benchmark.ipynb` pada sesi dan GPU yang sama.
+3. Jalankan sel "Arsipkan hasil" di `06_analysis_export.ipynb` dan unduh
+   `hasil_*.tar.gz` (atau salin ke Drive) sebelum runtime berakhir.
+4. Tulis Bab 4 dari angka di `outputs/tuning/` (`final_comparison.csv`,
    `success_criteria.csv`, `tuning_summary.json`).
 
 ## Aturan validitas Bab 4
