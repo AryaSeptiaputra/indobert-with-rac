@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -37,12 +38,43 @@ from src.config import (
     URL_PLACEHOLDER,
     settings,
 )
+from src.utils.checksum import canonical_digest, count_row_differences, load_text_table
 from src.utils.io import write_csv, write_json
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
 DEDUP_KEY_COLUMN = "nfkc_key"
+
+STATUS_IDENTICAL = "identik"
+STATUS_DIFFERENT = "berbeda"
+STATUS_MISSING = "belum ada"
+
+
+@dataclass(frozen=True)
+class SplitCheck:
+    """Hasil pemeriksaan reproduktibilitas satu split terhadap berkas yang sudah ada.
+
+    Attributes:
+        name: Nama split.
+        status: "identik", "berbeda", atau "belum ada".
+        new_digest: Checksum isi split yang baru dibangun.
+        old_digest: Checksum isi berkas lama; `None` bila belum ada.
+        new_rows: Jumlah baris split baru.
+        old_rows: Jumlah baris berkas lama.
+        rows_only_new: Baris yang hanya ada di split baru.
+        rows_only_old: Baris yang hanya ada di berkas lama. Nol di kedua sisi pada
+            status "berbeda" berarti isinya sama dan hanya urutannya yang berubah.
+    """
+
+    name: str
+    status: str
+    new_digest: str
+    old_digest: str | None
+    new_rows: int
+    old_rows: int
+    rows_only_new: int
+    rows_only_old: int
 
 # Codepoint karakter tak-terlihat yang dibuang sebelum NFKC. Ditulis sebagai
 # daftar angka agar berkas ini tetap 100% ASCII dan tahan korupsi editor.
@@ -407,6 +439,61 @@ class DatasetBuilder:
             raise ValueError(f"kebocoran text_clean masih tersisa: {residual}")
 
         return splits
+
+    def _check_split(
+        self,
+        name: str,
+        new_frame: pd.DataFrame,
+        path: Path,
+    ) -> SplitCheck:
+        columns = [RAW_TEXT_COLUMN, TEXT_COLUMN, LABEL_COLUMN]
+        new_frame = new_frame[columns]
+        new_digest = canonical_digest(new_frame)
+
+        old_frame = load_text_table(path)
+        if old_frame is None:
+            return SplitCheck(name, STATUS_MISSING, new_digest, None, len(new_frame), 0, 0, 0)
+
+        # Kolom yang hilang di berkas lama menjadi kosong, sehingga hasilnya "berbeda".
+        old_frame = old_frame.reindex(columns=columns)
+        old_digest = canonical_digest(old_frame)
+        only_new, only_old = count_row_differences(new_frame, old_frame)
+        status = STATUS_IDENTICAL if new_digest == old_digest else STATUS_DIFFERENT
+        return SplitCheck(
+            name, status, new_digest, old_digest, len(new_frame), len(old_frame), only_new, only_old
+        )
+
+    def verify_reproducibility(
+        self,
+        splits: dict[str, pd.DataFrame],
+        processed_dir: Path | None = None,
+    ) -> dict[str, SplitCheck]:
+        """Bandingkan split yang baru dibangun dengan berkas split yang sudah ada.
+
+        Perbandingan memakai checksum ISI (`canonical_digest`), bukan byte berkas,
+        sehingga hasilnya sama di Windows dan Linux serta tidak terpengaruh
+        normalisasi ujung baris oleh git. Isi yang benar-benar berbeda tetap
+        terdeteksi.
+
+        Args:
+            splits: Hasil `build`.
+            processed_dir: Folder berkas split yang dibandingkan; `None` memakai
+                `settings.processed_dir`.
+
+        Returns:
+            Dict nama split ke `SplitCheck`.
+
+        Raises:
+            CorruptArtifactError: Kalau berkas split lama ada tapi tidak bisa dibaca.
+        """
+        return {
+            name: self._check_split(
+                name,
+                splits[name],
+                (processed_dir or settings.processed_dir) / f"{name}.csv",
+            )
+            for name in SPLIT_NAMES
+        }
 
     def write(
         self,

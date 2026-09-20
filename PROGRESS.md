@@ -39,7 +39,7 @@ Yang sudah terverifikasi:
 - Smoke run ujung ke ujung di RTX 3050 (subset kecil): RM-a → RM-b → RM-c →
   benchmark final berjalan dan menghasilkan 19 figur, 3 tabel metrik, dan 3
   checkpoint.
-- `pytest`: 353 test lulus, tanpa GPU.
+- `pytest`: 409 test lulus, tanpa GPU.
 
 ## Dataset
 
@@ -139,17 +139,54 @@ pembanding empat rumus fusi), setara pola 03a dan 03b. Tahap RM-b menyimpan stat
 SETIAP head di `checkpoints/rmb_heads/`. Biaya RM-c di `success_criteria` dan
 `final_comparison` sekarang biaya head yang dipakainya, bukan nol.
 
-**Status:** kode, test (353 lulus), grid, dan notebook sudah siap. Eksplorasi BELUM
+**Status:** kode, test (409 lulus), grid, dan notebook sudah siap. Eksplorasi BELUM
 dijalankan di kampanye resmi; angka Bab 4 tetap yang di `best.json`. Untuk menjalankan
-di kampanye Vast.ai yang ada: buka `04_tuning_campaign.ipynb` bagian 6, jalankan
-`runner.restore_rmb_heads()` (melatih ulang head yang belum tersimpan; di RTX 3090 yang
-sama dengan kampanye asli hasilnya seharusnya identik, dan peringatan muncul bila selisih
-> 0,05 pp dari `runs_rmb.csv`), lalu `explore_rmc` dan `decide_rmc_champion`.
+di kampanye Vast.ai yang ada: jalankan `04_tuning_campaign.ipynb` dari atas. Sel
+`runner.restore_checkpoints(include_rma=True)` (sebelum bagian 5) memulihkan head RM-b,
+`rmb_best.pt`, `rmc_best.pt`, dan `rma_best.pt` dari konfigurasi di `best.json`; di RTX
+3090 yang sama dengan kampanye asli hasilnya seharusnya identik, dan peringatan muncul
+bila selisih > 0,05 pp dari catatan. Lalu `explore_rmc` dan `decide_rmc_champion`.
+Checkpoint tidak ikut git, dan menjalankan ulang skenario tidak membuat checkpoint
+juara kembali karena F1 yang sama tidak dipromosikan (2026-09-20: 03c gagal dengan
+`rmb_best.pt tidak ada` di instance baru).
 
 Uji kelayakan di mesin lokal (RTX 3050, folder sementara, BUKAN hasil resmi): eksplorasi
 3.591 evaluasi selesai dalam 36 detik; fusi linear unggul di 25 dari 27 head; penantang
 teratas (head run 25, linear alpha=0,4 k=1) selisih +0,11 pp dengan interval bootstrap
 [-0,60, +0,81] pp, sehingga juara standar tetap.
+
+## Gate reproduktibilitas split lintas lingkungan (2026-09-20)
+
+Gate di `02_preprocessing.ipynb` dulu membandingkan SHA-256 BYTE berkas split, dan
+menolak split yang sama di Vast.ai (`train: BERBEDA 3632f141... vs 24551e68...`).
+Penyebabnya bukan perbedaan isi: pandas menulis ujung baris sesuai OS, dan git dengan
+`core.autocrlf=true` di mesin Windows menormalkan CRLF menjadi LF saat commit,
+termasuk CR yang ada di DALAM `textOriginal` (21 baris di train, 24 di seluruh
+split; blob git 21 byte lebih pendek). Split yang dibangun di Linux membawa CR itu,
+sedangkan blob-nya tidak.
+
+Sekarang gate membandingkan checksum ISI kanonik (`src/utils/checksum.py`,
+`DatasetBuilder.verify_reproducibility`): ujung baris di dalam sel diseragamkan ke
+LF sebelum di-hash. Hasilnya sama untuk salinan kerja Windows, blob git, dan keluaran
+Linux; isi, urutan baris, dan nama kolom yang benar-benar berubah tetap terdeteksi.
+`write_csv` juga selalu menulis LF, dan sel Simpan tidak menulis ulang split yang
+sudah identik. Checksum isi (16 karakter pertama): train `96775273eaa7`,
+val `0e5d8c524d30`, test `ee3e2a7d8aa9`.
+
+## Hasil run tidak lagi disimpan di git (2026-09-20)
+
+`outputs/` sekarang di-gitignore seluruhnya, kecuali figur EDA dan README. Sebelumnya
+`runs_*.csv`, `best.json`, `history/`, `metrics/`, dan figur ikut ter-commit. Di
+instance baru itu membuat kampanye 04 gagal: `run_batch` melewati semua konfigurasi
+yang sudah tercatat (resume) dan mengembalikan tabel kosong, sel `nlargest` lalu
+crash, dan `BestTracker` tidak mempromosikan F1 yang sama sehingga checkpoint juara
+tidak pernah dibuat. Sel 04 juga sekarang membaca riwayat dari `runs_frame`, bukan
+dari nilai kembalian `run_batch`, supaya tetap jalan saat resume melewati semuanya.
+Angka kampanye Vast.ai lama tetap ada di riwayat git (commit `c05cb7a`) dan di
+`docs/`, dan ditandai tag `hasil-vast-2026-09-14` (commit `63392bd`, commit terakhir
+yang masih memuat berkas hasil). Hasil kampanye berikutnya diamankan dengan sel
+"Arsipkan hasil" di `06_analysis_export.ipynb`, yang membuat `hasil_<gpu>_<waktu>.tar.gz`
+untuk diunduh sebelum instance dihancurkan.
 
 ## Langkah berikutnya
 

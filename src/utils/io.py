@@ -104,6 +104,9 @@ def read_csv(path: str | Path, default: pd.DataFrame | None = None) -> pd.DataFr
 def write_csv(path: str | Path, frame: pd.DataFrame) -> Path:
     """Tulis DataFrame ke CSV secara atomik (tanpa kolom index).
 
+    Ujung baris selalu LF, bukan `os.linesep`, supaya berkas yang sama byte demi byte
+    ditulis di Windows maupun Linux.
+
     Args:
         path: Lokasi berkas tujuan; folder induk dibuat bila belum ada.
         frame: DataFrame yang ditulis.
@@ -116,7 +119,7 @@ def write_csv(path: str | Path, frame: pd.DataFrame) -> Path:
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    _atomic_write_text(path, frame.to_csv(index=False))
+    _atomic_write_text(path, frame.to_csv(index=False, lineterminator="\n"))
     return path
 
 

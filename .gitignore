@@ -45,31 +45,18 @@ data/processed/*
 
 # ---------------------------------------------------------------------------
 # Keluaran eksperimen
-# Seluruh isi outputs/ bisa dihasilkan ulang oleh notebook, KECUALI berkas
-# ringkas yang dikutip langsung di Bab 4 -- itu di-whitelist di bawah.
+# Hasil run TIDAK disimpan di git. Berkas seperti runs_*.csv, best.json, dan
+# history/ dibaca ulang oleh CampaignRunner: run_batch melewati konfigurasi yang
+# sudah tercatat (resume) dan BestTracker hanya mempromosikan F1 yang lebih tinggi
+# dari juara tercatat. Hasil lama yang ikut ter-clone membuat kampanye baru di
+# instance lain berjalan tanpa menghasilkan apa pun dan tanpa checkpoint juara.
+# Simpan hasil dari mesin tempat kampanye berjalan (mis. HASIL.xlsx), bukan lewat git.
+#
+# Yang tetap ter-track: figur EDA (keluaran 01_eda, bukan hasil kampanye) dan README.
 # ---------------------------------------------------------------------------
-outputs/*
-!outputs/*/
-
-# Arsip kampanye Vast.ai: disimpan di disk sebagai jalan mundur sampai kampanye
-# lokal terbukti berhasil, lalu dihapus. Tidak pernah masuk git (folder aslinya
-# results/vast/ juga tidak).
-outputs/_archive_*/
-
-outputs/**/features/
-outputs/**/checkpoints/
-outputs/**/*.npy
-outputs/**/*.pt
-outputs/**/job.log
-outputs/**/job.pid
-
+outputs/**
+!outputs/**/
 !outputs/_migration_checksums.json
-!outputs/**/runs_*.csv
-!outputs/**/best.json
-!outputs/**/hardware.json
-!outputs/**/tuning_summary.json
-!outputs/**/metrics/*.csv
-!outputs/**/history/*.csv
 !outputs/**/README.md
 !outputs/figures/eda/*.png
 
@@ -88,6 +75,7 @@ models/*
 # ---------------------------------------------------------------------------
 HASIL*.xlsx
 *.zip
+hasil_*.tar.gz
 
 # ---------------------------------------------------------------------------
 # Rahasia

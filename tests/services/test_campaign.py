@@ -449,3 +449,141 @@ class TestBiayaEfektifRMC:
     def test_skenario_lain_memakai_catatan_juaranya_sendiri(self, runner) -> None:
         row = runner.run("rmb", {"epochs": 2})
         assert runner._effective_cost("rmb") == (row["trainable_params"], row["train_time_s"])
+
+
+class TestPemulihanCheckpoint:
+    """Checkpoint tidak ikut git tetapi best.json ikut; di clone baru keduanya tidak selaras."""
+
+    @staticmethod
+    def hapus_checkpoint(tmp_path) -> None:
+        import shutil
+
+        shutil.rmtree(tmp_path / "checkpoints")
+
+    def test_pesan_error_menunjuk_ke_pemulihan(self, runner) -> None:
+        with pytest.raises(FileNotFoundError, match="restore_checkpoints"):
+            runner._load_checkpoint("rmb_best.pt")
+
+    def test_menjalankan_ulang_rmb_tidak_membuat_juara_kembali(self, runner, tmp_path) -> None:
+        """Alasan pemulihan dibutuhkan: F1 yang sama tidak dipromosikan, jadi tidak disimpan."""
+        runner.run("rmb", {"epochs": 2})
+        (tmp_path / "checkpoints" / "rmb_best.pt").unlink()
+
+        runner.run("rmb", {"epochs": 2})
+
+        assert not (tmp_path / "checkpoints" / "rmb_best.pt").exists()
+
+    def test_juara_rmb_dibangun_kembali_dengan_bobot_yang_sama(self, runner, tmp_path) -> None:
+        runner.run("rmb", {"epochs": 3})
+        before = torch.load(tmp_path / "checkpoints" / "rmb_best.pt", map_location="cpu", weights_only=True)
+        self.hapus_checkpoint(tmp_path)
+
+        restored = runner.restore_checkpoints()
+
+        assert restored["rmb_best"] is True
+        after = torch.load(tmp_path / "checkpoints" / "rmb_best.pt", map_location="cpu", weights_only=True)
+        assert after["run_id"] == before["run_id"]
+        for key, value in before["head_state"].items():
+            torch.testing.assert_close(after["head_state"][key], value)
+
+    def test_head_yang_dimuat_setelah_pemulihan_dapat_dipakai(self, runner, tmp_path) -> None:
+        runner.run("rmb", {"epochs": 2})
+        self.hapus_checkpoint(tmp_path)
+        runner.restore_checkpoints()
+
+        head, config = runner._load_best_head()
+
+        assert config["epochs"] == 2
+        assert head(torch.tensor(runner.features.embeddings["val"])).shape[1] == 2
+
+    def test_riwayat_dan_best_json_tidak_berubah(self, runner, tmp_path) -> None:
+        runner.run("rmb", {"epochs": 2})
+        runner.run("rmc", {"alpha": 0.2, "k": 5})
+        history = {name: (tmp_path / name).read_text(encoding="utf-8") for name in ("runs_rmb.csv", "runs_rmc.csv", "best.json")}
+        self.hapus_checkpoint(tmp_path)
+
+        runner.restore_checkpoints()
+
+        for name, content in history.items():
+            assert (tmp_path / name).read_text(encoding="utf-8") == content
+
+    def test_checkpoint_yang_sudah_ada_tidak_disentuh(self, runner, tmp_path) -> None:
+        runner.run("rmb", {"epochs": 2})
+        runner.run("rmc", {"alpha": 0.2, "k": 5})
+
+        restored = runner.restore_checkpoints()
+
+        assert restored["rmb_heads"] == []
+        assert restored["rmb_best"] is False
+        assert restored["rmc_best"] is False
+
+    def test_juara_rmc_standar_dibangun_kembali_dari_konfigurasi_tercatat(self, runner, tmp_path) -> None:
+        runner.run("rmb", {"epochs": 2})
+        runner.run("rmc", {"alpha": 0.2, "k": 5})
+        (tmp_path / "checkpoints" / "rmc_best.pt").unlink()
+
+        assert runner.restore_checkpoints()["rmc_best"] is True
+
+        head, config = runner._load_rmc_predictor()
+        assert (config.formula, config.alpha, config.k) == ("linear", 0.2, 5)
+
+    def test_juara_rmc_hasil_eksplorasi_kembali_membawa_head_dan_rumusnya(
+        self, runner, explored, tmp_path, monkeypatch
+    ) -> None:
+        monkeypatch.setattr("src.services.campaign.challenger_wins", lambda *args, **kwargs: True)
+        decision = runner.decide_rmc_champion(explored["runs"])
+        self.hapus_checkpoint(tmp_path)
+
+        runner.restore_checkpoints()
+
+        head, config = runner._load_rmc_predictor()
+        assert config.formula == decision["challenger"]["formula"]
+        expected = runner._load_rmb_head(decision["challenger"]["rmb_run_id"])
+        for key, value in expected.state_dict().items():
+            torch.testing.assert_close(head.state_dict()[key], value)
+
+    def test_rma_tidak_dilatih_ulang_kecuali_diminta(self, runner, tmp_path, monkeypatch) -> None:
+        runner.run("rmb", {"epochs": 1})
+
+        def tidak_boleh_dipanggil(*args, **kwargs):
+            raise AssertionError("RM-a tidak boleh dilatih ulang tanpa include_rma")
+
+        monkeypatch.setattr("src.services.campaign.RMATrainer", tidak_boleh_dipanggil)
+        assert runner.restore_checkpoints()["rma_best"] is False
+
+    def test_rma_tanpa_juara_tercatat_tidak_dilatih(self, runner, monkeypatch) -> None:
+        runner.run("rmb", {"epochs": 1})
+        monkeypatch.setattr("src.services.campaign.RMATrainer", lambda *a, **k: (_ for _ in ()).throw(AssertionError()))
+        assert runner.restore_checkpoints(include_rma=True)["rma_best"] is False
+
+    def test_rma_dilatih_ulang_dari_konfigurasi_juara_bila_diminta(
+        self, runner, tmp_path, monkeypatch
+    ) -> None:
+        from types import SimpleNamespace
+
+        from src.models.schemas import RMAConfig
+
+        class PelatihPalsu:
+            def __init__(self, data) -> None:
+                pass
+
+            def train(self, config):
+                return SimpleNamespace(
+                    best_metrics={"f1_macro": 0.98}, best_state={"w": torch.zeros(2)}
+                ), None
+
+        monkeypatch.setattr("src.services.campaign.RMATrainer", PelatihPalsu)
+        runner.run("rmb", {"epochs": 1})
+        runner.best.data["rma"] = {
+            "run_id": 7, "config": RMAConfig().model_dump(), "val_f1_macro": 0.98,
+        }
+
+        assert runner.restore_checkpoints(include_rma=True)["rma_best"] is True
+
+        payload = torch.load(tmp_path / "checkpoints" / "rma_best.pt", map_location="cpu", weights_only=True)
+        assert payload["run_id"] == 7
+        assert "w" in payload["model_state"]
+
+    def test_tanpa_riwayat_rmb_ditolak(self, runner) -> None:
+        with pytest.raises(RuntimeError, match="runs_rmb.csv kosong"):
+            runner.restore_checkpoints()

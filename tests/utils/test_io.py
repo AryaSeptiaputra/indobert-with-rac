@@ -77,3 +77,10 @@ class TestCsv:
         path.write_text('a,b\n1,2\n3,4,5,6\n"tak ditutup', encoding="utf-8")
         with pytest.raises(CorruptArtifactError, match="CSV rusak"):
             read_csv(path)
+
+    def test_ujung_baris_selalu_lf_di_semua_os(self, tmp_path) -> None:
+        """CRLF di Windows membuat berkas yang sama menghasilkan byte berbeda."""
+        target = write_csv(tmp_path / "a.csv", pd.DataFrame({"x": [1, 2], "y": ["a", "b"]}))
+        data = target.read_bytes()
+        assert b"\r" not in data
+        assert data == b"x,y\n1,a\n2,b\n"

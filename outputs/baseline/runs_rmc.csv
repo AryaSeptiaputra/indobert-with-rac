@@ -1,8 +1,0 @@
-run_id,scenario,batch_id,model_name,alpha,k,weighting,head_arch_rmb,val_f1_macro,val_acc,val_precision_macro,val_recall_macro,val_f1_judi,index_vectors,eval_time_s,trainable_params,train_time_s,catatan,timestamp,delta_vs_best_f1_macro_pp,is_tie_with_best
-1,rmc,,indobenchmark/indobert-base-p2,0.3,5,similarity,mlp,0.954031,0.972183,0.94941,0.958828,0.925144,6588,0.11,0,0.0,"baseline RAC alpha=0,3 k=5 mengikuti Yu dkk. 2023",2026-09-14 16:50:17,,
-2,rmc,rmc_sweep_alpha,indobenchmark/indobert-base-p2,0.0,5,similarity,mlp,0.940029,0.96291,0.927013,0.95466,0.902985,6588,0.05,0,0.0,sweep alpha=0.0 pada k=5,2026-09-14 16:50:17,-1.4002,False
-3,rmc,rmc_sweep_alpha,indobenchmark/indobert-base-p2,0.1,5,similarity,mlp,0.946489,0.96719,0.93658,0.95728,0.913208,6588,0.14,0,0.0,sweep alpha=0.1 pada k=5,2026-09-14 16:50:17,-0.7542,False
-4,rmc,rmc_sweep_alpha,indobenchmark/indobert-base-p2,0.2,5,similarity,mlp,0.948667,0.968616,0.939863,0.958153,0.916667,6588,0.1,0,0.0,sweep alpha=0.2 pada k=5,2026-09-14 16:50:17,-0.5364,False
-5,rmc,rmc_sweep_alpha,indobenchmark/indobert-base-p2,0.5,5,similarity,mlp,0.962449,0.977889,0.970592,0.954777,0.93837,6588,0.15,0,0.0,sweep alpha=0.5 pada k=5,2026-09-14 16:50:18,0.8418,False
-6,rmc,rmc_sweep_alpha,indobenchmark/indobert-base-p2,0.7,5,similarity,mlp,0.950856,0.971469,0.966027,0.937267,0.919028,6588,0.05,0,0.0,sweep alpha=0.7 pada k=5,2026-09-14 16:50:18,-1.1593,False
-7,rmc,rmc_sweep_alpha,indobenchmark/indobert-base-p2,1.0,5,similarity,mlp,0.941413,0.966476,0.964079,0.92214,0.903093,6588,0.18,0,0.0,sweep alpha=1.0 pada k=5,2026-09-14 16:50:18,-2.1036,False

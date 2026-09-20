@@ -55,7 +55,7 @@ putusan juara RM-c. Tahap RM-b menyimpan state setiap head di
 `checkpoints/rmb_heads/`; eksplorasi memuat head itu, tidak melatih ulang.
 
 ```bash
-pytest        # 353 test, tanpa GPU
+pytest        # 409 test, tanpa GPU
 ```
 
 ## Arsitektur
@@ -95,6 +95,7 @@ data/raw/data_labeling.csv
 | `src/services/faiss_benchmark.py` | `FaissBenchmark` |
 | `src/services/aggregation.py` | `RunMerger` |
 | `src/services/workbook.py` | `WorkbookBuilder` |
+| `src/services/archive.py` | `ResultArchiver`: bungkus `outputs/` dan `HASIL.xlsx` menjadi `hasil_*.tar.gz` untuk diunduh |
 | `src/utils/` | `setup_logger`, `set_seed`, I/O atomik |
 
 ### Mekanisme RAC (RM-c)
@@ -130,16 +131,23 @@ probabilitas" di atas tidak berlaku untuknya; nyatakan rumus juaranya di Bab 4.
 3. **Indeks FAISS hanya dari split train.** Memasukkan val atau test membuat
    retrieval menemukan sampel uji di dalam indeksnya sendiri.
 4. **Jangan menimpa `data/processed/` tanpa gate checksum.** Notebook 02 punya
-   sel yang membandingkan SHA-256 split baru dengan yang lama dan menolak
-   melanjutkan bila berbeda. Split yang berubah membuat seluruh riwayat run
-   menjadi yatim.
+   sel yang membandingkan checksum ISI split baru dengan yang lama
+   (`DatasetBuilder.verify_reproducibility`) dan menolak melanjutkan bila
+   berbeda. Yang dibandingkan isi kanonik, bukan SHA-256 byte berkas: hash byte
+   berbeda antar OS (CRLF vs LF) dan antar git `autocrlf`. Split yang berubah
+   membuat seluruh riwayat run menjadi yatim.
 5. **Input model adalah kolom `text_clean`**, bukan `textOriginal`.
 6. **Model wajib `resize_token_embeddings`** karena preprocessing menambahkan
    `[URL]`, `[MENTION]`, `[NUM]`. Sudah ditangani factory di `heads.py`.
 
 ## Konvensi hasil
 
-`CampaignRunner` menulis ke `out_dir` (default `outputs/tuning/`):
+`CampaignRunner` menulis ke `out_dir` (default `outputs/tuning/`). Seluruh
+`outputs/` di-gitignore (kecuali figur EDA dan README): hasil run tidak disimpan di
+git, karena `runs_*.csv` dan `best.json` yang ikut ter-clone membuat kampanye baru
+melewati semua konfigurasi (resume) dan tidak menghasilkan checkpoint juara. Amankan
+hasil dengan sel "Arsipkan hasil" di `06_analysis_export.ipynb` (`ResultArchiver`)
+sebelum instance dihancurkan.
 
 - `runs_{rma,rmb,rmc}.csv` — satu baris per run, menumpuk lintas sesi. Memuat
   kolom `catatan` (alasan konfigurasi dicoba) dan kolom turunan
@@ -150,6 +158,9 @@ probabilitas" di atas tidak berlaku untuknya; nyatakan rumus juaranya di Bab 4.
 - `history/{scenario}_history.csv` — kurva per-epoch, satu berkas menumpuk per
   skenario dengan kolom `run_id`.
 - `checkpoints/`, `figures/`, `metrics/`, `tuning_summary.json`, `hardware.json`.
+  Checkpoint TIDAK ikut git (di-gitignore) sedangkan `best.json` ikut; di clone atau
+  instance baru pulihkan dengan `runner.restore_checkpoints()`, karena menjalankan
+  ulang skenario tidak membuat checkpoint juara kembali (F1 sama tidak dipromosikan).
   `checkpoints/rmb_heads/run_{id}.pt` menyimpan SETIAP head RM-b (bukan hanya
   juara). `checkpoints/rmc_best.pt` memuat head dan rumus fusi juara RM-c bila
   juaranya hasil eksplorasi.
@@ -216,11 +227,11 @@ dari tiga syarat:
 ## Struktur branch
 
 Repo ini punya tiga branch: `main` (codebase rujukan, tanpa data hasil run),
-`local` (hasil kampanye di mesin lokal, RTX 3050 Laptop), dan `vast.ai` (hasil
-kampanye di instance Vast.ai, RTX 3090). Saat bekerja di `local` atau
+`local` (kampanye di mesin lokal, RTX 3050 Laptop), dan `vast.ai` (kampanye di
+instance Vast.ai, RTX 3090). Saat bekerja di `local` atau
 `vast.ai`, Aturan #1 di atas berlaku per branch: jangan campur angka efisiensi
 dari kedua branch itu dalam satu tabel Bab 4. Codebase identik di ketiga
-branch; yang berbeda hanya isi `outputs/` dan narasi `PROGRESS.md`.
+branch; yang berbeda hanya narasi `PROGRESS.md`. Hasil run tidak disimpan di git.
 
 ## Status
 

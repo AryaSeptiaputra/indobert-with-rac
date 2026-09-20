@@ -72,7 +72,8 @@ IndoBERT-with-RAC/
 │   │   ├── reporting.py       # FigureReporter
 │   │   ├── faiss_benchmark.py # FaissBenchmark
 │   │   ├── aggregation.py     # RunMerger
-│   │   └── workbook.py        # WorkbookBuilder (ekspor Excel)
+│   │   ├── workbook.py        # WorkbookBuilder (ekspor Excel)
+│   │   └── archive.py         # ResultArchiver (arsip hasil .tar.gz untuk diunduh)
 │   └── utils/                 # logger, seeding, I/O atomik
 ├── tests/                     # pytest, mirror struktur src/
 ├── notebooks/                 # ENTRY POINT seluruh pipeline
@@ -97,8 +98,8 @@ bawah):
 | Branch | Isi |
 |---|---|
 | `main` | Codebase rujukan (kode saja). Tidak menyimpan hasil eksperimen apa pun — titik awal clone. |
-| `local` | Hasil kampanye yang dijalankan di mesin lokal (RTX 3050 Laptop, 4 GB VRAM). |
-| `vast.ai` | Hasil kampanye yang dijalankan di instance Vast.ai (RTX 3090). |
+| `local` | Kampanye yang dijalankan di mesin lokal (RTX 3050 Laptop, 4 GB VRAM); narasinya di `PROGRESS.md`. |
+| `vast.ai` | Kampanye yang dijalankan di instance Vast.ai (RTX 3090); narasinya di `PROGRESS.md`. |
 
 Untuk mulai kerja di instance Vast.ai:
 
@@ -108,8 +109,18 @@ cd indobert-with-rac
 git checkout vast.ai
 ```
 
+Checkpoint (`outputs/**/checkpoints/`) tidak ikut git, jadi di clone baru harus
+dipulihkan dengan `runner.restore_checkpoints()`; sel untuk itu sudah ada di
+`03c_rmc_rac.ipynb` dan `04_tuning_campaign.ipynb`. Menjalankan ulang 03b atau 04
+TIDAK membuat checkpoint juara kembali.
+
 Codebase (`src/`, `notebooks/`, `tests/`) identik di ketiga branch — yang
-berbeda hanya isi `outputs/` dan narasi `PROGRESS.md`. Jangan gabungkan angka
+berbeda hanya narasi `PROGRESS.md`. Hasil run (`outputs/`) TIDAK disimpan di git:
+`runs_*.csv` dan `best.json` yang ikut ter-clone membuat kampanye baru melewati
+semua konfigurasi dan tidak menghasilkan checkpoint juara. Simpan hasil dari mesin
+tempat kampanye berjalan sebelum instance dihapus: jalankan sel "Arsipkan hasil" di
+`06_analysis_export.ipynb`, lalu unduh `hasil_*.tar.gz` yang dihasilkannya.
+Jangan gabungkan angka
 efisiensi (waktu latih, latency, peak memory) dari `local` dan `vast.ai` dalam
 satu tabel; F1-macro boleh dibandingkan lintas branch karena tidak bergantung
 hardware.

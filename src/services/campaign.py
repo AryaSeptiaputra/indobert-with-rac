@@ -21,6 +21,7 @@ syarat agar angka efisiensi di Bab 4 sah dibandingkan.
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -433,6 +434,103 @@ class CampaignRunner:
             restored.append(run_id)
 
         logger.info("Head RM-b dipulihkan: %d run", len(restored))
+        return restored
+
+    def _restore_rmb_champion(self) -> bool:
+        champion = self.best.get("rmb")
+        target = self.checkpoint_dir / "rmb_best.pt"
+        if not champion or target.exists():
+            return False
+
+        head_file = self.heads_dir / f"run_{int(champion['run_id'])}.pt"
+        if not head_file.exists():
+            raise FileNotFoundError(f"head juara RM-b {head_file} belum ada; panggil restore_rmb_heads()")
+        shutil.copy2(head_file, target)
+        return True
+
+    def _restore_rmc_champion(self) -> bool:
+        champion = self.best.get("rmc")
+        target = self.checkpoint_dir / "rmc_best.pt"
+        if not champion or target.exists():
+            return False
+
+        config = dict(champion["config"])
+        source_name = champion.get("source", "standar")
+        payload: dict[str, object] = {
+            "config": config,
+            "run_id": champion.get("run_id"),
+            "val_f1_macro": champion["val_f1_macro"],
+            "model_name": champion.get("model_name", self.model_name),
+            "source": source_name,
+        }
+        if source_name == "eksplorasi":
+            head_checkpoint = self._load_checkpoint(f"rmb_heads/run_{int(config['rmb_run_id'])}.pt")
+            payload.update(
+                head_state=head_checkpoint["head_state"],
+                head_config=head_checkpoint["config"],
+                hidden_size=head_checkpoint["hidden_size"],
+            )
+        torch.save(payload, target)
+        return True
+
+    def _restore_rma_champion(self) -> bool:
+        champion = self.best.get("rma")
+        target = self.checkpoint_dir / "rma_best.pt"
+        if not champion or target.exists():
+            return False
+
+        config = parse_config("rma", champion["config"])
+        result, _ = RMATrainer(self.data).train(config)
+        reproduced_f1 = float(result.best_metrics["f1_macro"])
+        drift_pp = abs(reproduced_f1 - float(champion["val_f1_macro"])) * 100
+        if drift_pp > REPRODUCTION_TOLERANCE_PP:
+            logger.warning(
+                "Juara RM-a tidak mereproduksi angka lama: %.4f vs %.4f (%.3f pp)",
+                reproduced_f1, float(champion["val_f1_macro"]), drift_pp,
+            )
+        torch.save(
+            {
+                "model_state": result.best_state,
+                "config": config.model_dump(),
+                "run_id": champion.get("run_id"),
+                "val_f1_macro": reproduced_f1,
+                "model_name": self.model_name,
+            },
+            target,
+        )
+        return True
+
+    def restore_checkpoints(self, include_rma: bool = False) -> dict[str, object]:
+        """Pulihkan checkpoint yang hilang, tanpa mengubah riwayat run maupun `best.json`.
+
+        Checkpoint tidak ikut git (`outputs/**/checkpoints/` di-gitignore), sedangkan
+        `best.json` ikut. Di clone atau instance baru, checkpoint juara hilang dan
+        tidak bisa dibuat lagi dengan menjalankan ulang skenarionya: F1-nya tidak
+        LEBIH TINGGI dari juara yang tercatat, sehingga tidak dipromosikan dan tidak
+        disimpan. Metode ini membangunnya kembali dari konfigurasi yang tercatat.
+
+        Yang dipulihkan: state setiap head RM-b (`rmb_heads/`), `rmb_best.pt`, dan
+        `rmc_best.pt`. RM-a (`rma_best.pt`) hanya dipulihkan bila diminta karena
+        melatih ulang juaranya. Checkpoint yang sudah ada tidak disentuh. Di mesin
+        yang sama hasilnya identik dengan run asli; lintas mesin bisa bergeser, dan
+        pergeseran di atas 0,05 pp dicatat sebagai peringatan.
+
+        Args:
+            include_rma: Latih ulang juara RM-a bila `rma_best.pt` belum ada.
+
+        Returns:
+            Dict `rmb_heads` (nomor run yang dipulihkan) serta `rmb_best`, `rmc_best`,
+            dan `rma_best` (True bila dipulihkan pada pemanggilan ini).
+
+        Raises:
+            RuntimeError: Kalau `runs_rmb.csv` kosong.
+            FileNotFoundError: Kalau head yang dibutuhkan juara tidak ada.
+        """
+        restored: dict[str, object] = {"rmb_heads": self.restore_rmb_heads()}
+        restored["rmb_best"] = self._restore_rmb_champion()
+        restored["rmc_best"] = self._restore_rmc_champion()
+        restored["rma_best"] = self._restore_rma_champion() if include_rma else False
+        logger.info("Checkpoint dipulihkan: %s", restored)
         return restored
 
     def explore_rmc(self, grid: list[FusionFormulaConfig]) -> dict[str, pd.DataFrame]:
@@ -1190,8 +1288,9 @@ class CampaignRunner:
         path = self.checkpoint_dir / filename
         if not path.exists():
             raise FileNotFoundError(
-                f"checkpoint {filename} tidak ada di {self.checkpoint_dir}; "
-                "jalankan skenario terkait lebih dulu"
+                f"checkpoint {filename} tidak ada di {self.checkpoint_dir}; jalankan "
+                "skenario terkait lebih dulu, atau bila best.json sudah ada (checkpoint "
+                "tidak ikut git) pulihkan dengan runner.restore_checkpoints()"
             )
         return torch.load(path, map_location=self.device, weights_only=True)
 

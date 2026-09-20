@@ -169,3 +169,86 @@ class TestDatasetBuilder:
         combined = pd.read_csv(written["combined"])
         assert set(combined["split"]) == {"train", "val", "test"}
         assert len(combined) == sum(len(frame) for frame in splits.values())
+
+
+class TestVerifyReproducibility:
+    @pytest.fixture
+    def built(self, raw_frame: pd.DataFrame):
+        builder = DatasetBuilder(seed=42)
+        return builder, builder.build(raw_frame)
+
+    def test_belum_ada_split_lama(self, built, tmp_path) -> None:
+        builder, splits = built
+        checks = builder.verify_reproducibility(splits, processed_dir=tmp_path)
+        assert {check.status for check in checks.values()} == {"belum ada"}
+        assert all(check.old_digest is None for check in checks.values())
+
+    def test_split_yang_baru_ditulis_identik(self, built, tmp_path) -> None:
+        builder, splits = built
+        builder.write(splits, output_dir=tmp_path, interim_path=tmp_path / "data_clean.csv")
+        checks = builder.verify_reproducibility(splits, processed_dir=tmp_path)
+        assert {check.status for check in checks.values()} == {"identik"}
+
+    def test_ujung_baris_crlf_di_windows_tetap_identik(self, built, tmp_path) -> None:
+        builder, splits = built
+        builder.write(splits, output_dir=tmp_path, interim_path=tmp_path / "data_clean.csv")
+        for name in ("train", "val", "test"):
+            path = tmp_path / f"{name}.csv"
+            path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+        checks = builder.verify_reproducibility(splits, processed_dir=tmp_path)
+        assert {check.status for check in checks.values()} == {"identik"}
+
+    def test_cr_di_dalam_teks_yang_dibuang_git_tetap_identik(self, built, tmp_path) -> None:
+        """Skenario yang menggagalkan gate di Vast.ai: split dibangun di Linux membawa
+        CR di dalam textOriginal, sedangkan berkas yang di-commit dari Windows sudah
+        dinormalkan git tanpa CR itu."""
+        builder, splits = built
+        first = splits["train"].index[0]
+        splits["train"].loc[first, "textOriginal"] = "baris satu\r\nbaris dua"
+        builder.write(splits, output_dir=tmp_path, interim_path=tmp_path / "data_clean.csv")
+        for name in ("train", "val", "test"):
+            path = tmp_path / f"{name}.csv"
+            path.write_bytes(path.read_bytes().replace(b"\r\n", b"\n"))
+
+        checks = builder.verify_reproducibility(splits, processed_dir=tmp_path)
+        assert {check.status for check in checks.values()} == {"identik"}
+
+    def test_isi_yang_berubah_terdeteksi_beserta_jumlah_barisnya(self, built, tmp_path) -> None:
+        builder, splits = built
+        builder.write(splits, output_dir=tmp_path, interim_path=tmp_path / "data_clean.csv")
+        path = tmp_path / "train.csv"
+        old = pd.read_csv(path, dtype=str, keep_default_na=False)
+        old.loc[0, "text_clean"] = old.loc[0, "text_clean"] + " diubah"
+        path.write_bytes(old.to_csv(index=False, lineterminator="\n").encode("utf-8"))
+
+        checks = builder.verify_reproducibility(splits, processed_dir=tmp_path)
+        assert checks["train"].status == "berbeda"
+        assert (checks["train"].rows_only_new, checks["train"].rows_only_old) == (1, 1)
+        assert checks["val"].status == "identik"
+
+    def test_urutan_berbeda_terdeteksi_tetapi_tanpa_baris_selisih(self, built, tmp_path) -> None:
+        builder, splits = built
+        builder.write(splits, output_dir=tmp_path, interim_path=tmp_path / "data_clean.csv")
+        path = tmp_path / "train.csv"
+        old = pd.read_csv(path, dtype=str, keep_default_na=False)
+        path.write_bytes(old.iloc[::-1].to_csv(index=False, lineterminator="\n").encode("utf-8"))
+
+        check = builder.verify_reproducibility(splits, processed_dir=tmp_path)["train"]
+        assert check.status == "berbeda"
+        assert (check.rows_only_new, check.rows_only_old) == (0, 0)
+
+    def test_kolom_hilang_di_berkas_lama_berarti_berbeda(self, built, tmp_path) -> None:
+        builder, splits = built
+        builder.write(splits, output_dir=tmp_path, interim_path=tmp_path / "data_clean.csv")
+        path = tmp_path / "val.csv"
+        old = pd.read_csv(path, dtype=str, keep_default_na=False).drop(columns=["text_clean"])
+        path.write_bytes(old.to_csv(index=False, lineterminator="\n").encode("utf-8"))
+
+        assert builder.verify_reproducibility(splits, processed_dir=tmp_path)["val"].status == "berbeda"
+
+    def test_split_tidak_diubah_oleh_pemeriksaan(self, built, tmp_path) -> None:
+        builder, splits = built
+        before = {name: frame.copy() for name, frame in splits.items()}
+        builder.verify_reproducibility(splits, processed_dir=tmp_path)
+        for name, frame in splits.items():
+            pd.testing.assert_frame_equal(frame, before[name])
