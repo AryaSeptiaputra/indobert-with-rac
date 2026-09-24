@@ -52,7 +52,8 @@ dan Gambar 4.1-4.8:
   kelas di guard, tingkat [UNK] sebelum/sesudah NFKC per kelas).
 - Notebook: `06_artifacts.ipynb` (gambar + data tabel mentah, tabel disusun manual)
   dan `07_archive.ipynb`; nomor 04 kosong. Test: 425 lulus. Output sel hasil kampanye lama di 04,
-05, 06, dan 06_lite dikosongkan. `04_tuning_campaign.ipynb` akan dialihfungsikan
+05, dan 06 dikosongkan. Varian IndoBERT-lite tidak dipakai dalam penelitian;
+notebook `*_lite` dan `outputs/tuning_lite/` dihapus. `04_tuning_campaign.ipynb` akan dialihfungsikan
 menjadi notebook pembangkit figur untuk jurnal/skripsi (rancangan figur belum
 diputuskan; kontennya masih kampanye lama untuk sementara). Angka kampanye
 lama di ringkasan bawah ini (RTX 3050, 2026-09-02) sudah TIDAK berlaku untuk
