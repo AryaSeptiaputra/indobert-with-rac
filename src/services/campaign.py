@@ -35,12 +35,13 @@ from src.models.comment_dataset import GamblingCommentDataset
 from src.models.heads import build_encoder, build_finetune_model, build_head, mean_pool
 from src.models.schemas import CONFIG_MODELS, RMBConfig, RMCConfig, RunRequest, parse_config
 from src.services.data import ExperimentData
-from src.services.environment import record_tuning_session, verify_final_session
 from src.services.evaluation import (
     RUN_METRIC_KEYS,
     ClassificationEvaluator,
     EfficiencyProfiler,
     paired_bootstrap_f1,
+    record_tuning_session,
+    verify_final_session,
 )
 from src.services.features import FeatureExtractor, FeatureSet
 from src.services.fusion_ablation import FusionFormulaComparator, FusionFormulaConfig
