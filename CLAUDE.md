@@ -62,8 +62,8 @@ test dibuka. 05 berhenti bila lingkungan berbeda dari saat tuning
 (`verify_hardware`) atau hash kandidat tidak cocok.
 
 `06_artifacts.ipynb` (setelah 05) membangkitkan Gambar 4.1-4.8
-(`thesis_figures.py`) dan data mentah Tabel 4.1-4.19 serta L.1
-(`thesis_data.py`, satu sheet per tabel di `artifacts/data_tabel.xlsx`); tabel
+(`figures.py`) dan data mentah Tabel 4.1-4.19 serta L.1
+(`tables.py`, satu sheet per tabel di `artifacts/data_tabel.xlsx`); tabel
 siap tempel TIDAK dibuat, disusun manual saat penulisan. `07_archive.ipynb`
 dijalankan terakhir supaya artefak ikut terbungkus arsip. Nomor 04 sengaja
 kosong.
@@ -95,27 +95,20 @@ data/raw/data_labeling.csv
 | `src/models/schemas.py` | `RMAConfig`, `RMBConfig`, `RMCConfig`, `RunRequest` |
 | `src/models/comment_dataset.py` | `load_tokenizer` (dengan fallback WordPiece), `GamblingCommentDataset` |
 | `src/models/heads.py` | `build_finetune_model`, `build_encoder`, `build_head`, `mean_pool` |
-| `src/services/preprocessing.py` | `TextCleaner`, `DatasetBuilder` |
+| `src/services/preprocessing.py` | `TextCleaner`, `DatasetBuilder`; statistik preprocessing (baris terbuang per kelas di guard, tingkat [UNK] sebelum/sesudah NFKC) |
 | `src/services/data.py` | `ExperimentData` |
 | `src/services/features.py` | `FeatureExtractor`, `FeatureSet` |
 | `src/services/training.py` | `RMATrainer`, `RMBTrainer`, `RMCEvaluator` |
-| `src/services/rac.py` | `RACClassifier`, `NeighborCache` |
+| `src/services/rac.py` | `RACClassifier`, `NeighborCache`, `FaissBenchmark` |
 | `src/services/fusion_ablation.py` | `FusionFormulaComparator`: evaluator fusi RM-c (kampanye hanya memakai `linear`; Rumus 1-4 masih ada di kode tetapi tidak dipakai) |
-| `src/services/evaluation.py` | `ClassificationEvaluator`, `EfficiencyProfiler` |
+| `src/services/evaluation.py` | `ClassificationEvaluator`, `EfficiencyProfiler`; spesifikasi lingkungan, sesi tuning, gate lingkungan benchmark final |
 | `src/services/campaign.py` | `CampaignRunner` — orkestrasi run, batch, benchmark final |
 | `src/services/run_log.py` | `RunLogger`, `HistoryWriter`, `BestTracker` |
-| `src/services/reporting.py` | `FigureReporter` |
-| `src/services/thesis_figures.py` | `ThesisFigureBuilder`: Gambar 4.1-4.8 (PNG 300 dpi + PDF) langsung dari log |
-| `src/services/thesis_data.py` | `ThesisDataExporter`: data mentah Tabel 4.1-4.19 dan L.1 ke `data_tabel.xlsx` |
-| `src/services/rac_summary.py` | Ringkasan RAC per head (baseline alpha=0), urutan run RM-c |
-| `src/services/candidates.py` | Kandidat #1/#2 tiap skenario, `candidates.json` berhash |
-| `src/services/environment.py` | Spesifikasi lingkungan, sesi tuning, gate lingkungan benchmark final |
-| `src/services/preprocessing_stats.py` | Baris terbuang per kelas di guard, tingkat [UNK] sebelum/sesudah NFKC |
-| `src/services/number_format.py` | Koma desimal dan pembulatan setengah ke atas untuk anotasi gambar |
-| `src/services/faiss_benchmark.py` | `FaissBenchmark` |
-| `src/services/aggregation.py` | `RunMerger` |
-| `src/services/workbook.py` | `WorkbookBuilder` |
-| `src/services/archive.py` | `ResultArchiver`: bungkus `outputs/` dan `HASIL.xlsx` menjadi `hasil_*.tar.gz` untuk diunduh |
+| `src/services/selection.py` | Peringkat run, kandidat #1/#2 tiap skenario (`candidates.json` berhash), ringkasan RAC per head (baseline alpha=0) |
+| `src/services/reporting.py` | `FigureReporter`: gambar diagnostik per run selama tuning |
+| `src/services/figures.py` | `FigureBuilder`: Gambar 4.1-4.8 (PNG 300 dpi + PDF) langsung dari log; koma desimal dan pembulatan setengah ke atas |
+| `src/services/tables.py` | `TableDataExporter`: data mentah Tabel 4.1-4.19 dan L.1 ke `data_tabel.xlsx` |
+| `src/services/export.py` | `WorkbookBuilder` (`HASIL.xlsx`), `RunMerger`, `ResultArchiver` (bungkus `outputs/` dan `HASIL.xlsx` menjadi `hasil_*.tar.gz` untuk diunduh) |
 | `src/utils/` | `setup_logger`, `set_seed`, I/O atomik |
 
 ### Mekanisme RAC (RM-c)

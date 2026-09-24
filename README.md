@@ -59,27 +59,20 @@ IndoBERT-with-RAC/
 │   │   ├── comment_dataset.py # Tokenizer + PyTorch Dataset
 │   │   └── heads.py           # Factory encoder dan classification head
 │   ├── services/
-│   │   ├── preprocessing.py   # TextCleaner, DatasetBuilder
+│   │   ├── preprocessing.py   # TextCleaner, DatasetBuilder, statistik NFKC dan guard
 │   │   ├── data.py            # ExperimentData (split + tokenizer + class weight)
 │   │   ├── features.py        # FeatureExtractor, cache embedding beku
 │   │   ├── training.py        # RMATrainer, RMBTrainer, RMCEvaluator
-│   │   ├── rac.py             # RACClassifier, NeighborCache (FAISS + fusi probabilitas)
+│   │   ├── rac.py             # RACClassifier, NeighborCache, FaissBenchmark (FAISS + fusi probabilitas)
 │   │   ├── fusion_ablation.py # Evaluator fusi RAC (kampanye hanya memakai linear)
-│   │   ├── evaluation.py      # ClassificationEvaluator, EfficiencyProfiler
+│   │   ├── evaluation.py      # ClassificationEvaluator, EfficiencyProfiler, gate satu-hardware
 │   │   ├── campaign.py        # CampaignRunner (orkestrasi run dan benchmark)
 │   │   ├── run_log.py         # RunLogger, HistoryWriter, BestTracker
-│   │   ├── reporting.py       # FigureReporter
-│   │   ├── thesis_figures.py  # Gambar 4.1-4.8
-│   │   ├── thesis_data.py     # Data mentah Tabel 4.1-4.19 dan L.1
-│   │   ├── rac_summary.py     # Ringkasan RAC per head
-│   │   ├── candidates.py      # Kandidat #1/#2 berhash
-│   │   ├── environment.py     # Lingkungan dan gate satu-hardware
-│   │   ├── preprocessing_stats.py # Statistik NFKC dan guard
-│   │   ├── number_format.py   # Koma desimal, pembulatan setengah ke atas
-│   │   ├── faiss_benchmark.py # FaissBenchmark
-│   │   ├── aggregation.py     # RunMerger
-│   │   ├── workbook.py        # WorkbookBuilder (ekspor Excel)
-│   │   └── archive.py         # ResultArchiver (arsip hasil .tar.gz untuk diunduh)
+│   │   ├── selection.py       # Peringkat run, kandidat #1/#2 berhash, ringkasan RAC per head
+│   │   ├── reporting.py       # FigureReporter (gambar diagnostik per run)
+│   │   ├── figures.py         # FigureBuilder: Gambar 4.1-4.8
+│   │   ├── tables.py          # TableDataExporter: data mentah Tabel 4.1-4.19 dan L.1
+│   │   └── export.py          # WorkbookBuilder, RunMerger, ResultArchiver (.tar.gz)
 │   └── utils/                 # logger, seeding, I/O atomik
 ├── tests/                     # pytest, mirror struktur src/
 ├── notebooks/                 # ENTRY POINT seluruh pipeline

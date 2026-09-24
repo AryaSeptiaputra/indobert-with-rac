@@ -53,7 +53,14 @@ dan Gambar 4.1-4.8:
 - Notebook: `06_artifacts.ipynb` (gambar + data tabel mentah, tabel disusun manual)
   dan `07_archive.ipynb`; nomor 04 kosong. Test: 425 lulus. Output sel hasil kampanye lama di 04,
 05, dan 06 dikosongkan. Varian IndoBERT-lite tidak dipakai dalam penelitian;
-notebook `*_lite` dan `outputs/tuning_lite/` dihapus. `04_tuning_campaign.ipynb` akan dialihfungsikan
+notebook `*_lite` dan `outputs/tuning_lite/` dihapus. Modul `src/services/`
+dirampingkan dari 21 menjadi 14 berkas tanpa mengubah keluaran (hanya pemindahan
+kode dan penggantian nama; diverifikasi dengan snapshot keluaran sebelum/sesudah
+dan 425 test): `preprocessing_stats` ke `preprocessing`, `candidates` +
+`rac_summary` menjadi `selection`, `faiss_benchmark` ke `rac`, `environment` ke
+`evaluation`, `workbook` + `aggregation` + `archive` menjadi `export`,
+`thesis_figures` + `number_format` menjadi `figures` (`FigureBuilder`), dan
+`thesis_data` menjadi `tables` (`TableDataExporter`). `04_tuning_campaign.ipynb` akan dialihfungsikan
 menjadi notebook pembangkit figur untuk jurnal/skripsi (rancangan figur belum
 diputuskan; kontennya masih kampanye lama untuk sementara). Angka kampanye
 lama di ringkasan bawah ini (RTX 3050, 2026-09-02) sudah TIDAK berlaku untuk
