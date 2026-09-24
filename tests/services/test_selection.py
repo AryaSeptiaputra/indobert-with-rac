@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 import torch
 
-from src.services.candidates import (
+from src.services.selection import (
     NO_TIED_CANDIDATE,
     build_candidates,
     load_candidates,

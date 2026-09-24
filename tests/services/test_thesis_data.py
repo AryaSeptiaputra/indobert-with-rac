@@ -7,7 +7,7 @@ import json
 import pandas as pd
 import pytest
 
-from src.services.candidates import build_candidates, write_candidates
+from src.services.selection import build_candidates, write_candidates
 from src.services.thesis_data import ThesisDataExporter
 from tests.services.test_thesis_figures import RMC_CHAMPION_HEAD, tulis_log_kampanye
 

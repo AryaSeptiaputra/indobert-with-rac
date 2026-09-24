@@ -34,7 +34,6 @@ from src.config import SCENARIOS, settings
 from src.models.comment_dataset import GamblingCommentDataset
 from src.models.heads import build_encoder, build_finetune_model, build_head, mean_pool
 from src.models.schemas import CONFIG_MODELS, RMBConfig, RMCConfig, RunRequest, parse_config
-from src.services.candidates import build_candidates, load_candidates, rank_runs, write_candidates
 from src.services.data import ExperimentData
 from src.services.environment import record_tuning_session, verify_final_session
 from src.services.evaluation import (
@@ -46,9 +45,15 @@ from src.services.evaluation import (
 from src.services.features import FeatureExtractor, FeatureSet
 from src.services.fusion_ablation import FusionFormulaComparator, FusionFormulaConfig
 from src.services.rac import RACClassifier, softmax
-from src.services.rac_summary import rank_rmc_runs
 from src.services.reporting import FigureReporter
 from src.services.run_log import BestTracker, HistoryWriter, RunLogger
+from src.services.selection import (
+    build_candidates,
+    load_candidates,
+    rank_rmc_runs,
+    rank_runs,
+    write_candidates,
+)
 from src.services.training import RMATrainer, RMBTrainer, RMCEvaluator
 from src.utils.io import read_csv, write_csv, write_json
 from src.utils.logger import setup_logger

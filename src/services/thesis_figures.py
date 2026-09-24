@@ -29,7 +29,7 @@ from matplotlib.ticker import FuncFormatter  # noqa: E402
 
 from src.config import CLASS_NAMES, settings  # noqa: E402
 from src.services.number_format import format_number  # noqa: E402
-from src.services.rac_summary import rac_per_head, rmc_grid  # noqa: E402
+from src.services.selection import rac_per_head, rmc_grid  # noqa: E402
 from src.utils.io import read_csv, read_json  # noqa: E402
 from src.utils.logger import setup_logger  # noqa: E402
 

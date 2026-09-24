@@ -17,9 +17,8 @@ import pandas as pd
 from sklearn.metrics import confusion_matrix
 
 from src.config import settings
-from src.services.candidates import load_candidates, rank_runs
 from src.services.evaluation import ClassificationEvaluator
-from src.services.rac_summary import head_group, rac_per_head, rank_rmc_runs, rmc_grid
+from src.services.selection import head_group, load_candidates, rac_per_head, rank_rmc_runs, rank_runs, rmc_grid
 from src.utils.io import read_csv, read_json
 from src.utils.logger import setup_logger
 
