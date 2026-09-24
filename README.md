@@ -69,6 +69,13 @@ IndoBERT-with-RAC/
 │   │   ├── campaign.py        # CampaignRunner (orkestrasi run dan benchmark)
 │   │   ├── run_log.py         # RunLogger, HistoryWriter, BestTracker
 │   │   ├── reporting.py       # FigureReporter
+│   │   ├── thesis_figures.py  # Gambar 4.1-4.8
+│   │   ├── thesis_data.py     # Data mentah Tabel 4.1-4.19 dan L.1
+│   │   ├── rac_summary.py     # Ringkasan RAC per head
+│   │   ├── candidates.py      # Kandidat #1/#2 berhash
+│   │   ├── environment.py     # Lingkungan dan gate satu-hardware
+│   │   ├── preprocessing_stats.py # Statistik NFKC dan guard
+│   │   ├── number_format.py   # Koma desimal, pembulatan setengah ke atas
 │   │   ├── faiss_benchmark.py # FaissBenchmark
 │   │   ├── aggregation.py     # RunMerger
 │   │   ├── workbook.py        # WorkbookBuilder (ekspor Excel)
@@ -118,7 +125,7 @@ berbeda hanya narasi `PROGRESS.md`. Hasil run (`outputs/`) TIDAK disimpan di git
 `runs_*.csv` dan `best.json` yang ikut ter-clone membuat kampanye baru melewati
 semua konfigurasi dan tidak menghasilkan checkpoint juara. Simpan hasil dari mesin
 tempat kampanye berjalan sebelum instance dihapus: jalankan sel "Arsipkan hasil" di
-`06_analysis_export.ipynb`, lalu unduh `hasil_*.tar.gz` yang dihasilkannya.
+`07_archive.ipynb`, lalu unduh `hasil_*.tar.gz` yang dihasilkannya.
 Jangan gabungkan angka
 efisiensi (waktu latih, latency, peak memory) dari `local` dan `vast.ai` dalam
 satu tabel; F1-macro boleh dibandingkan lintas branch karena tidak bergantung
@@ -132,7 +139,7 @@ Seluruh pipeline dijalankan dari notebook, berurutan:
 
 ```
 01_eda → 02_preprocessing → 03a_rma → 03b_rmb → 03c_rmc
-       → 05_final_benchmark → 06_analysis_export → 04_bab4_artifacts
+       → 05_final_benchmark → 06_artifacts → 07_archive
    (03a-03c: kampanye RM-a → RM-b → RM-c seluruh head, satu mesin)
 ```
 
@@ -142,10 +149,10 @@ Seluruh pipeline dijalankan dari notebook, berurutan:
 | `02_preprocessing.ipynb` | Membangun split 70:15:15 beserta gate reproduktibilitas |
 | `03a_rma_finetune.ipynb` | Kampanye RM-a: kalibrasi biaya, grid `lr x epochs x batch`, coordinate descent `warmup_ratio`/`weight_decay` |
 | `03b_rmb_frozen.ipynb` | Kampanye RM-b: ekstraksi fitur beku dan seluruh grid head; setiap head disimpan |
-| `03c_rmc_rac.ipynb` | Kampanye RM-c (fusi linear): seluruh head RM-b x 66 `alpha x k`, lalu `weighting=uniform` di sel juara |
-| `04_bab4_artifacts.ipynb` | Gambar 4.1-4.8 Bab 4 dari log kampanye; gambar test (4.5-4.8) muncul setelah 05 dijalankan |
-| `05_final_benchmark.ipynb` | Split test dan benchmark inferensi, satu sesi |
-| `06_analysis_export.ipynb` | Biaya FAISS, penggabungan riwayat, ekspor Excel |
+| `03c_rmc_rac.ipynb` | Kampanye RM-c (fusi linear): seluruh head RM-b x 66 `alpha x k`, putusan juara (default head RM-b resmi vs penantang, bootstrap), `weighting=uniform` di sel juara, penetapan kandidat #2 |
+| `05_final_benchmark.ipynb` | Gate lingkungan, split test, kandidat #2, benchmark inferensi per komponen, satu sesi |
+| `06_artifacts.ipynb` | Gambar 4.1-4.8 dan data mentah Tabel 4.1-4.19 + L.1 (`data_tabel.xlsx`) dari log |
+| `07_archive.ipynb` | Biaya FAISS lintas k, penggabungan riwayat, ekspor `HASIL.xlsx`, arsip hasil |
 
 Jangan lewati `02_preprocessing.ipynb`: seluruh notebook model bergantung pada
 keluarannya.

@@ -1,7 +1,7 @@
 """Gambar Bab 4, dibangkitkan langsung dari berkas log kampanye.
 
 Satu builder membaca `runs_*.csv`, `best.json`, dan `metrics/` di folder keluaran
-kampanye lalu menulis Gambar 4.1 sampai 4.8 ke `figures/bab4/` sebagai PNG 300 dpi
+kampanye lalu menulis Gambar 4.1 sampai 4.8 ke `artifacts/gambar/` sebagai PNG 300 dpi
 dan PDF vektor. Tidak ada angka yang diketik manual: setiap nilai yang tampil di
 gambar berasal dari berkas-berkas itu.
 
@@ -28,6 +28,8 @@ from matplotlib.patches import Patch, Rectangle  # noqa: E402
 from matplotlib.ticker import FuncFormatter  # noqa: E402
 
 from src.config import CLASS_NAMES, settings  # noqa: E402
+from src.services.number_format import format_number  # noqa: E402
+from src.services.rac_summary import rac_per_head, rmc_grid  # noqa: E402
 from src.utils.io import read_csv, read_json  # noqa: E402
 from src.utils.logger import setup_logger  # noqa: E402
 
@@ -55,7 +57,7 @@ SCENARIO_MARKERS = {"RM-a": "o", "RM-b": "s", "RM-c": "D"}
 RMA_GRID_BATCH = "rma_tahap1_grid"
 RMB_CAPACITY_BATCHES = ("rmb_tuning_grid", "rmb_tuning_grid_stage1b")
 RMC_GRID_WEIGHTING = "similarity"
-LATENCY_COMPONENTS = ("encoder", "classification head", "retrieval dan fusi")
+LATENCY_COMPONENTS = ("encoder", "classification head", "retrieval FAISS", "fusi")
 
 STYLE = {
     "font.family": "serif",
@@ -84,21 +86,6 @@ STYLE = {
     "mathtext.it": "Liberation Serif:italic",
     "mathtext.bf": "Liberation Serif:bold",
 }
-
-
-def format_number(value: float, decimals: int = 2, sign: bool = False) -> str:
-    """Format angka gaya Indonesia: koma desimal, titik ribuan.
-
-    Args:
-        value: Angka yang diformat.
-        decimals: Jumlah digit di belakang koma.
-        sign: Cantumkan tanda `+` untuk nilai positif.
-
-    Returns:
-        String angka, misalnya `1.234,57` atau `+0,21`.
-    """
-    text = f"{value:+,.{decimals}f}" if sign else f"{value:,.{decimals}f}"
-    return text.replace(",", "_").replace(".", ",").replace("_", ".")
 
 
 def format_scientific(value: float) -> str:
@@ -140,7 +127,7 @@ class ThesisFigureBuilder:
 
     def __init__(self, out_dir: str | Path | None = None) -> None:
         self.out_dir = settings.resolve_out_dir(out_dir)
-        self.figures_dir = self.out_dir / "figures" / "bab4"
+        self.figures_dir = self.out_dir / "artifacts" / "gambar"
 
     def build_all(self, skip_missing: bool = True) -> dict[str, list[Path] | str]:
         """Bangun seluruh gambar.
@@ -329,19 +316,19 @@ class ThesisFigureBuilder:
         official_head = int(self._best()["rmb"]["run_id"])
         final_head = int(final["config"]["rmb_run_id"])
 
-        rows = summary.sort_values("val_f1_rmb", ascending=True).reset_index(drop=True)
+        rows = summary.sort_values("f1_no_rac", ascending=True).reset_index(drop=True)
         positions = np.arange(len(rows))
 
         with plt.rc_context(STYLE):
             fig, ax = plt.subplots(figsize=(FIGURE_WIDTH_IN, 5.0), constrained_layout=True)
-            ax.hlines(positions, rows["val_f1_rmb"], rows["val_f1_best"],
+            ax.hlines(positions, rows["f1_no_rac"], rows["f1_best"],
                       color=BLUE_RAMP[2], linewidth=1.2, zorder=1)
-            ax.scatter(rows["val_f1_rmb"], positions, s=22, color=BLUE_RAMP[1],
+            ax.scatter(rows["f1_no_rac"], positions, s=22, color=BLUE_RAMP[1],
                        edgecolor=BLUE_RAMP[4], linewidth=0.6, zorder=2, label="tanpa RAC")
-            ax.scatter(rows["val_f1_shared"], positions, s=26, facecolor="white",
+            ax.scatter(rows["f1_shared"], positions, s=26, facecolor="white",
                        edgecolor=BLUE_RAMP[5], linewidth=1.0, zorder=3,
                        label="konfigurasi fusi bersama")
-            ax.scatter(rows["val_f1_best"], positions, s=26, color=BLUE_RAMP[5], zorder=4,
+            ax.scatter(rows["f1_best"], positions, s=26, color=BLUE_RAMP[5], zorder=4,
                        label="konfigurasi fusi terbaik per head")
 
             grid = self._rmc_grid()
@@ -355,11 +342,11 @@ class ThesisFigureBuilder:
                        facecolor="none", edgecolor=FINAL_ORANGE, linewidth=1.8, zorder=5,
                        label="konfigurasi final")
 
-            span = rows[["val_f1_rmb", "val_f1_best"]].to_numpy()
+            span = rows[["f1_no_rac", "f1_best"]].to_numpy()
             offset = (span.max() - span.min()) * 0.02
             for position, row in rows.iterrows():
                 ax.text(
-                    max(row["val_f1_best"], row["val_f1_shared"]) + offset, position,
+                    max(row["f1_best"], row["f1_shared"]) + offset, position,
                     format_number(row["gain_best_pp"], 2, sign=True),
                     va="center", fontsize=7, color=INK,
                 )
@@ -468,8 +455,8 @@ class ThesisFigureBuilder:
             .reindex(index=["RM-a", "RM-b", "RM-c"], columns=list(LATENCY_COMPONENTS))
             .fillna(0.0)
         )
-        colors = (BLUE_RAMP[4], BLUE_RAMP[2], BLUE_RAMP[0])
-        hatches = (None, None, "....")
+        colors = (BLUE_RAMP[4], BLUE_RAMP[2], BLUE_RAMP[1], BLUE_RAMP[0])
+        hatches = (None, None, "....", "////")
 
         with plt.rc_context(STYLE):
             fig, ax = plt.subplots(figsize=(FIGURE_WIDTH_IN, 3.0), constrained_layout=True)
@@ -493,7 +480,7 @@ class ThesisFigureBuilder:
             ax.set_ylabel("latency per sampel (ms)")
             ax.yaxis.set_major_formatter(number_formatter(1))
             ax.grid(axis="y")
-            ax.legend(loc="upper left", ncol=3)
+            ax.legend(loc="upper left", ncol=4)
             return self._save(fig, "gambar_4_7")
 
     def figure_4_8(self) -> list[Path]:
@@ -539,41 +526,8 @@ class ThesisFigureBuilder:
     # ------------------------------------------------------------------
 
     def rac_per_head(self) -> pd.DataFrame:
-        """Ringkasan RAC per head RM-b untuk Gambar 4.4.
-
-        Returns:
-            Satu baris per head: F1 tanpa RAC (`val_f1_rmb`), F1 konfigurasi fusi
-            terbaik head itu (`val_f1_best`) beserta kenaikannya, dan F1 pada
-            konfigurasi fusi bersama (`val_f1_shared`), yaitu (alpha, k) dengan
-            rata-rata F1-macro tertinggi lintas seluruh head.
-        """
-        grid = self._rmc_grid()
-        heads = self._runs("rmb").set_index("run_id")
-
-        shared = (
-            grid.groupby(["alpha", "k"])["val_f1_macro"].mean().sort_values(ascending=False)
-        ).index[0]
-        at_shared = grid[(grid["alpha"] == shared[0]) & (grid["k"] == shared[1])].set_index("rmb_run_id")
-
-        best = (
-            grid.sort_values(["val_f1_macro", "val_f1_judi"], ascending=False)
-            .groupby("rmb_run_id", sort=False)
-            .head(1)
-            .set_index("rmb_run_id")
-        )
-        summary = pd.DataFrame(
-            {
-                "val_f1_rmb": best["val_f1_rmb"],
-                "val_f1_best": best["val_f1_macro"],
-                "best_alpha": best["alpha"],
-                "best_k": best["k"],
-                "gain_best_pp": best["gain_pp"],
-                "val_f1_shared": at_shared["val_f1_macro"],
-            }
-        )
-        summary["shared_alpha"], summary["shared_k"] = shared
-        summary = summary.join(heads[["head_arch", "hidden_dim"]])
-        return summary.rename_axis("rmb_run_id").reset_index()
+        """Ringkasan RAC per head untuk Gambar 4.4 (lihat `rac_summary.rac_per_head`)."""
+        return rac_per_head(self._runs("rmc"), self._runs("rmb"))
 
     def training_costs(self) -> pd.DataFrame:
         """Biaya pelatihan juara tiap skenario untuk Gambar 4.6.
@@ -635,11 +589,7 @@ class ThesisFigureBuilder:
         return frame
 
     def _rmc_grid(self) -> pd.DataFrame:
-        runs = self._runs("rmc")
-        grid = runs[runs["weighting"] == RMC_GRID_WEIGHTING].copy()
-        grid["rmb_run_id"] = grid["rmb_run_id"].astype(int)
-        grid["gain_pp"] = (grid["val_f1_macro"] - grid["val_f1_rmb"]) * PP
-        return grid
+        return rmc_grid(self._runs("rmc"))
 
     @staticmethod
     def _head_label(row: pd.Series, with_id: bool = False) -> str:

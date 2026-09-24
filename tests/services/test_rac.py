@@ -206,3 +206,16 @@ class TestNeighborCache:
     def test_ukuran_indeks_sama_dengan_jumlah_train(self, corpus) -> None:
         embeddings, labels = corpus
         assert NeighborCache(embeddings, labels, max_k=3).index_size == 80
+
+
+def test_jenis_dan_ukuran_indeks_tercatat() -> None:
+    import numpy as np
+
+    from src.services.rac import RACClassifier
+
+    classifier = RACClassifier(k=2)
+    assert classifier.index_type is None and classifier.index_bytes == 0
+    embeddings = np.random.default_rng(0).normal(size=(10, 8)).astype("float32")
+    classifier.fit(embeddings, np.array([0, 1] * 5))
+    assert classifier.index_type == "IndexFlatIP"
+    assert classifier.index_bytes >= 10 * 8 * 4

@@ -33,7 +33,25 @@ tetapi tidak dipakai. Notebook 04 dialihfungsikan menjadi
 dari log; `run_final` kini juga menulis `metrics/final_predictions.csv` (prediksi
 test per baris) dan `metrics/latency_breakdown.csv` (encoder, head, retrieval dan
 fusi), dan `runs_rmb.csv` mencatat `train_peak_mem_mb` (maks ekstraksi dan
-training head). Test: 376 lulus. Output sel hasil kampanye lama di 04,
+training head). Test: 376 lulus.
+
+**Artefak penulisan (2026-09-24, lanjutan).** Pencatatan untuk Tabel 4.1-4.19, L.1,
+dan Gambar 4.1-4.8:
+- Putusan juara RM-c: default = konfigurasi terbaik pada head RM-b resmi; penantang
+  seluruh head menang hanya bila selisih > 0,15 pp DAN batas bawah CI95 bootstrap
+  berpasangan (10.000 iterasi, seed 42) > 0 (`rmc_champion_decision.json`).
+- Kandidat #2 (Tabel 4.16): `candidates.json` berhash ditulis di akhir 03c; RM-b
+  mengeluarkan varian anggaran epoch berepoch terbaik sama (bobot identik karena lr
+  konstan); aturan itu TIDAK berlaku untuk RM-a karena jadwal linear-warmup bergantung
+  pada total langkah. Checkpoint top-3 RM-a bergulir di `checkpoints/rma_top/`.
+- `hardware.json` diperluas dan 05 berhenti bila lingkungan berbeda (waktu boot
+  berbeda hanya peringatan, dicatat).
+- 05 mencatat latency per komponen dari satu jalur (encoder, head, retrieval FAISS,
+  fusi), waktu bangun, ukuran, dan jenis indeks, serta prediksi test per baris.
+- 02 menulis `outputs/preprocessing/preprocessing_stats.json` (baris terbuang per
+  kelas di guard, tingkat [UNK] sebelum/sesudah NFKC per kelas).
+- Notebook: `06_artifacts.ipynb` (gambar + data tabel mentah, tabel disusun manual)
+  dan `07_archive.ipynb`; nomor 04 kosong. Test: 425 lulus. Output sel hasil kampanye lama di 04,
 05, 06, dan 06_lite dikosongkan. `04_tuning_campaign.ipynb` akan dialihfungsikan
 menjadi notebook pembangkit figur untuk jurnal/skripsi (rancangan figur belum
 diputuskan; kontennya masih kampanye lama untuk sementara). Angka kampanye

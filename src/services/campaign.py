@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import json
 import shutil
-import subprocess
 import time
 from pathlib import Path
 
@@ -35,11 +34,19 @@ from src.config import SCENARIOS, settings
 from src.models.comment_dataset import GamblingCommentDataset
 from src.models.heads import build_encoder, build_finetune_model, build_head, mean_pool
 from src.models.schemas import CONFIG_MODELS, RMBConfig, RMCConfig, RunRequest, parse_config
+from src.services.candidates import build_candidates, load_candidates, rank_runs, write_candidates
 from src.services.data import ExperimentData
-from src.services.evaluation import RUN_METRIC_KEYS, ClassificationEvaluator, EfficiencyProfiler
+from src.services.environment import record_tuning_session, verify_final_session
+from src.services.evaluation import (
+    RUN_METRIC_KEYS,
+    ClassificationEvaluator,
+    EfficiencyProfiler,
+    paired_bootstrap_f1,
+)
 from src.services.features import FeatureExtractor, FeatureSet
 from src.services.fusion_ablation import FusionFormulaComparator, FusionFormulaConfig
 from src.services.rac import RACClassifier, softmax
+from src.services.rac_summary import rank_rmc_runs
 from src.services.reporting import FigureReporter
 from src.services.run_log import BestTracker, HistoryWriter, RunLogger
 from src.services.training import RMATrainer, RMBTrainer, RMCEvaluator
@@ -67,6 +74,11 @@ SIGNATURE_PRECISION = 12
 # Selisih F1-macro antara checkpoint yang dibangun ulang dan angka tercatat yang
 # masih dianggap run yang sama; di atas ini dicatat sebagai peringatan.
 REPRODUCTION_TOLERANCE_PP = 0.05
+
+# Checkpoint RM-a yang disimpan bergulir, supaya kandidat #2 bisa dievaluasi di
+# test tanpa melatih ulang (pelatihan ulang tidak menjamin kurva yang identik).
+RMA_TOP_CHECKPOINTS = 3
+CANDIDATES_FILE = "candidates.json"
 
 
 class CampaignRunner:
@@ -508,6 +520,195 @@ class CampaignRunner:
         logger.info("Checkpoint dipulihkan: %s", restored)
         return restored
 
+    def decide_rmc_champion(self) -> dict[str, object]:
+        """Tetapkan juara RM-c: default di head RM-b resmi, atau penantang seluruh head.
+
+        Default adalah konfigurasi fusi terbaik pada head juara RM-b, supaya RM-c
+        tetap "RM-b + RAC". Penantang adalah konfigurasi terbaik di seluruh head.
+        Penantang hanya menggantikan default bila selisih F1-macro validation
+        melampaui ambang seri DAN batas bawah interval bootstrap berpasangan 95%
+        di atas nol. Peringkat: F1-macro, lalu F1 judi, lalu head lebih murah,
+        k lebih kecil, alpha lebih kecil.
+
+        Returns:
+            Catatan keputusan; juga ditulis ke `rmc_champion_decision.json`.
+
+        Raises:
+            RuntimeError: Kalau juara RM-b atau riwayat RM-c belum ada, atau head
+                RM-b resmi belum dievaluasi di grid RM-c.
+        """
+        official = self.best.get("rmb")
+        runs = read_csv(self.out_dir / "runs_rmc.csv")
+        if not official or runs.empty:
+            raise RuntimeError("juara RM-b dan riwayat RM-c harus ada sebelum putusan juara RM-c")
+
+        ranked = rank_rmc_runs(runs)
+        official_head = int(official["run_id"])
+        on_official = ranked[ranked["rmb_run_id"] == official_head]
+        if on_official.empty:
+            raise RuntimeError(f"head RM-b resmi #{official_head} belum dievaluasi di grid RM-c")
+        default = on_official.iloc[0]
+        challenger = ranked.iloc[0]
+
+        if int(challenger["run_id"]) == int(default["run_id"]):
+            bootstrap = None
+            challenger_wins = False
+        else:
+            bootstrap = paired_bootstrap_f1(
+                self.features.labels["val"],
+                self._rmc_val_predictions(challenger),
+                self._rmc_val_predictions(default),
+            )
+            challenger_wins = bool(
+                bootstrap["observed_delta_pp"] > settings.tie_threshold_pp
+                and bootstrap["ci_low_pp"] > 0.0
+            )
+
+        winner = challenger if challenger_wins else default
+        head_is_official = int(winner["rmb_run_id"]) == official_head
+        config = self._rmc_config_of(winner)
+        payload = {
+            "run_id": int(winner["run_id"]),
+            "config": config,
+            "val_f1_macro": float(winner["val_f1_macro"]),
+            "train_time_s": 0.0,
+            "trainable_params": 0,
+            "head_train_time_s": float(winner["head_train_time_s"]),
+            "head_trainable_params": int(winner["head_trainable_params"]),
+            "head_is_official_rmb": head_is_official,
+            "model_name": self.model_name,
+            "decided": True,
+        }
+        self.best.replace("rmc", payload)
+        torch.save(
+            {
+                "config": config,
+                "run_id": payload["run_id"],
+                "val_f1_macro": payload["val_f1_macro"],
+                "model_name": self.model_name,
+                **self._head_payload(config["rmb_run_id"]),
+            },
+            self.checkpoint_dir / "rmc_best.pt",
+        )
+
+        decision: dict[str, object] = {
+            "decided_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "rule": (
+                "penantang menggantikan default bila selisih F1-macro validation > "
+                f"{settings.tie_threshold_pp} pp DAN batas bawah CI95 bootstrap berpasangan > 0"
+            ),
+            "tie_threshold_pp": settings.tie_threshold_pp,
+            "official_rmb_run_id": official_head,
+            "default": self._rmc_summary(default),
+            "challenger": self._rmc_summary(challenger),
+            "challenger_is_default": bootstrap is None,
+            "bootstrap": bootstrap,
+            "winner": "penantang" if challenger_wins else "default",
+            "head_is_official_rmb": head_is_official,
+            "cost_note": (
+                "biaya pelatihan RM-c = biaya head RM-b resmi"
+                if head_is_official
+                else f"biaya pelatihan RM-c = biaya head penantang #{int(winner['rmb_run_id'])}, "
+                "BUKAN warisan head RM-b resmi"
+            ),
+        }
+        write_json(self.out_dir / "rmc_champion_decision.json", decision)
+        logger.info(
+            "Putusan juara RM-c: %s (run #%d, head #%d)",
+            decision["winner"], payload["run_id"], config["rmb_run_id"],
+        )
+        return decision
+
+    def _rmc_config_of(self, row: pd.Series) -> dict[str, object]:
+        return RMCConfig(
+            rmb_run_id=int(row["rmb_run_id"]),
+            alpha=float(row["alpha"]),
+            k=int(row["k"]),
+            weighting=str(row["weighting"]),
+        ).model_dump()
+
+    @staticmethod
+    def _rmc_summary(row: pd.Series) -> dict[str, object]:
+        return {
+            "run_id": int(row["run_id"]),
+            "rmb_run_id": int(row["rmb_run_id"]),
+            "alpha": float(row["alpha"]),
+            "k": int(row["k"]),
+            "weighting": str(row["weighting"]),
+            "val_f1_macro": float(row["val_f1_macro"]),
+            "val_f1_judi": float(row["val_f1_judi"]),
+        }
+
+    def _rmc_val_predictions(self, row: pd.Series) -> np.ndarray:
+        config = RMCConfig.model_validate(self._rmc_config_of(row))
+        head, _ = self._head_from_checkpoint(
+            self._load_checkpoint(f"rmb_heads/run_{config.rmb_run_id}.pt")
+        )
+        _, extras = RMCEvaluator(self.features, head, self.device).evaluate(config, split="val")
+        return extras["preds"]
+
+    @property
+    def rma_top_dir(self) -> Path:
+        """Folder checkpoint top-3 RM-a (`run_{id}.pt`), dibuat bila belum ada."""
+        path = self.checkpoint_dir / "rma_top"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def _keep_rma_top(
+        self,
+        run_id: int,
+        config,
+        state: dict[str, torch.Tensor],
+        val_f1_macro: float,
+    ) -> None:
+        """Simpan checkpoint run ini bila masuk top-3 RM-a, buang yang tersingkir."""
+        top = set(
+            rank_runs(read_csv(self.out_dir / "runs_rma.csv"), "rma")["run_id"]
+            .head(RMA_TOP_CHECKPOINTS).astype(int)
+        )
+        if run_id in top:
+            torch.save(
+                {
+                    "model_state": state,
+                    "config": config.model_dump(),
+                    "run_id": run_id,
+                    "val_f1_macro": val_f1_macro,
+                    "model_name": self.model_name,
+                },
+                self.rma_top_dir / f"run_{run_id}.pt",
+            )
+        for path in self.rma_top_dir.glob("run_*.pt"):
+            if int(path.stem.split("_")[1]) not in top:
+                path.unlink()
+
+    def select_candidates(self) -> dict[str, object]:
+        """Tetapkan kandidat #1 dan #2 tiap skenario ke `candidates.json`.
+
+        Dipanggil di akhir 03c, SEBELUM test dibuka. Kandidat #1 adalah juara di
+        `best.json`; untuk RM-c, putusan juara harus sudah dibuat.
+
+        Returns:
+            Isi `candidates.json`, termasuk `content_sha256`.
+
+        Raises:
+            RuntimeError: Kalau ada skenario tanpa juara, atau putusan juara RM-c
+                belum dibuat.
+            FileExistsError: Kalau kandidat sudah pernah ditetapkan.
+        """
+        missing = [scenario for scenario in SCENARIOS if not self.best.get(scenario)]
+        if missing:
+            raise RuntimeError(f"skenario {missing} belum punya juara")
+        if not self.best.get("rmc").get("decided"):
+            raise RuntimeError("putusan juara RM-c belum dibuat; panggil decide_rmc_champion()")
+
+        body = build_candidates(
+            {scenario: read_csv(self.out_dir / f"runs_{scenario}.csv") for scenario in SCENARIOS},
+            {scenario: int(self.best.get(scenario)["run_id"]) for scenario in SCENARIOS},
+        )
+        stamped = write_candidates(self.out_dir / CANDIDATES_FILE, body)
+        logger.info("Kandidat ditetapkan, sha256 %s", stamped["content_sha256"])
+        return stamped
+
     def run_final(self) -> dict[str, pd.DataFrame]:
         """Evaluasi test dan benchmark inferensi ketiga skenario dalam satu sesi.
 
@@ -528,13 +729,19 @@ class CampaignRunner:
                 f"skenario {missing} belum punya run; jalankan tuning dulu sebelum Final"
             )
 
+        candidates = load_candidates(self.out_dir / CANDIDATES_FILE)
         logger.info("Benchmark final dimulai (satu sesi, device %s)", self.device)
+        # Seluruh model kandidat #2 disiapkan dan diverifikasi di validation
+        # SEBELUM split test dibuka.
+        seconds = self._prepare_second_candidates(candidates)
+
         model = self._load_rma_model()
         head, head_config = self._load_best_head()
         encoder = build_encoder(self.data.tokenizer, model_name=self.model_name).to(self.device)
         rmc_head, rmc_config = self._load_rmc_predictor()
 
         test_metrics = self._final_test_metrics(model, head, rmc_head, rmc_config)
+        self._candidate_test_table(candidates, seconds, test_metrics)
         benchmark = self._inference_benchmark(model, encoder, head, rmc_head, rmc_config)
         comparison = self._comparison_table(test_metrics, benchmark)
         criteria = self._success_criteria(test_metrics)
@@ -544,44 +751,29 @@ class CampaignRunner:
         return {"comparison": comparison, "benchmark": benchmark, "criteria": criteria}
 
     def write_hardware(self) -> dict[str, object]:
-        """Catat spesifikasi hardware dan versi pustaka ke `hardware.json`.
-
-        Angka efisiensi hanya bisa ditafsirkan bersama konteks ini, jadi berkasnya
-        ditulis di folder keluaran yang sama dengan hasilnya.
+        """Catat lingkungan tuning ke `hardware.json` (dipanggil di awal 03a).
 
         Returns:
-            Dict informasi hardware yang ditulis.
+            Isi `hardware.json`: spesifikasi lingkungan dan daftar sesi tuning.
+
+        Raises:
+            EnvironmentMismatchError: Kalau folder ini sudah memuat hasil dari
+                lingkungan lain.
         """
-        import transformers
+        return record_tuning_session(self.out_dir / "hardware.json")
 
-        info: dict[str, object] = {
-            "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU",
-            "cuda_available": torch.cuda.is_available(),
-            "cuda_version": torch.version.cuda,
-            "torch": torch.__version__,
-            "transformers": transformers.__version__,
-            "vram_total_mb": (
-                round(torch.cuda.get_device_properties(0).total_memory / 1024**2)
-                if torch.cuda.is_available()
-                else 0
-            ),
-            "recorded_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        }
+    def verify_hardware(self) -> dict[str, object]:
+        """Gate awal 05: lingkungan wajib identik dengan saat tuning.
 
-        try:
-            info["nvidia_smi"] = subprocess.check_output(
-                [
-                    "nvidia-smi",
-                    "--query-gpu=name,driver_version,memory.total",
-                    "--format=csv,noheader",
-                ],
-                text=True,
-            ).strip()
-        except (OSError, subprocess.SubprocessError):
-            logger.warning("nvidia-smi tidak tersedia; bagian itu dilewati")
+        Returns:
+            Isi `hardware.json` setelah sesi final dicatat.
 
-        write_json(self.out_dir / "hardware.json", info)
-        return info
+        Raises:
+            EnvironmentMismatchError: Kalau GPU, VRAM, driver, CUDA, torch,
+                transformers, atau faiss berbeda. Waktu boot yang berbeda hanya
+                peringatan, dicatat di `final_session`.
+        """
+        return verify_final_session(self.out_dir / "hardware.json")
 
     # ------------------------------------------------------------------
     # Handler per skenario
@@ -621,6 +813,8 @@ class CampaignRunner:
             self._plot_run_test("rma", run_id, truths, predictions, positives)
 
         row = run_logger.log(row)
+        if result.best_state is not None:
+            self._keep_rma_top(run_id, config, result.best_state, result.best_metrics["f1_macro"])
         self.history.append("rma", run_id, result.history)
         self.reporter.training_curve("rma", run_id, result.history)
 
@@ -776,6 +970,7 @@ class CampaignRunner:
             "val_f1_rmb": round(float(head_record["val_f1_macro"]), METRIC_PRECISION),
             **self._metric_columns(metrics),
             "index_vectors": extras["index_vectors"],
+            "index_type": extras["index_type"],
             "eval_time_s": extras["eval_time_s"],
             # RM-c sendiri tidak melatih apa pun; biaya head yang dipakainya
             # dicatat terpisah agar kriteria sukses menghitungnya.
@@ -799,7 +994,9 @@ class CampaignRunner:
 
         row = run_logger.log(row)
 
-        promoted = self.best.update(
+        # Setelah putusan juara dibuat, juara RM-c hanya berubah lewat
+        # decide_rmc_champion, bukan lewat F1 mentah run susulan.
+        promoted = not self.best.get("rmc").get("decided") and self.best.update(
             "rmc",
             {
                 "run_id": run_id,
@@ -878,6 +1075,13 @@ class CampaignRunner:
     def _inference_benchmark(
         self, model, encoder, head, rmc_head, rmc_config: FusionFormulaConfig
     ) -> pd.DataFrame:
+        """Latency dan memori inferensi satu sampel, dipecah per komponen.
+
+        Komponen tiap skenario dijalankan berurutan dalam SATU jalur, sama persis
+        dengan jalur inferensi ujung ke ujung; latency total adalah jumlah
+        komponennya. Waktu bangun dan ukuran indeks FAISS ditulis ke
+        `metrics/index_stats.json`.
+        """
         features = self.features
         dataset = GamblingCommentDataset.from_frame(
             self.data.test, self.data.tokenizer, max_length=self.data.max_length
@@ -892,11 +1096,22 @@ class CampaignRunner:
         inputs["token_type_ids"] = (
             token_type.to(self.device) if token_type is not None else None
         )
-        query = features.embeddings["test"][:1]
 
         train_labels = features.labels["train"]
-        classifier = RACClassifier(k=rmc_config.k, weighting=rmc_config.weighting).fit(
-            features.embeddings["train"], train_labels
+        classifier = RACClassifier(k=rmc_config.k, weighting=rmc_config.weighting)
+        started = time.perf_counter()
+        classifier.fit(features.embeddings["train"], train_labels)
+        index_build_s = time.perf_counter() - started
+        write_json(
+            self.out_dir / "metrics" / "index_stats.json",
+            {
+                "index_type": classifier.index_type,
+                "vectors": classifier.index_size,
+                "dimension": int(features.embeddings["train"].shape[1]),
+                "size_mb": round(classifier.index_bytes / 1024**2, 3),
+                "build_time_s": round(index_build_s, 4),
+                "source_split": "train",
+            },
         )
         comparator = FusionFormulaComparator(
             features, rmc_head, self.device, k=rmc_config.k, weighting=rmc_config.weighting
@@ -904,114 +1119,144 @@ class CampaignRunner:
 
         use_amp = self.device.type == "cuda"
 
-        def infer_rma():
-            with torch.no_grad(), torch.amp.autocast("cuda", enabled=use_amp):
-                return model(**inputs).logits
+        def inference(step):
+            def run(value):
+                with torch.no_grad(), torch.amp.autocast("cuda", enabled=use_amp):
+                    return step(value)
+            return run
 
-        def infer_rmb():
-            with torch.no_grad(), torch.amp.autocast("cuda", enabled=use_amp):
-                output = encoder(**inputs)
-                pooled = mean_pool(output.last_hidden_state, inputs["attention_mask"])
-                return head(pooled.float())
+        def frozen_encoder(_):
+            output = encoder(**inputs)
+            return mean_pool(output.last_hidden_state, inputs["attention_mask"]).float()
 
-        def infer_rmc():
-            with torch.no_grad(), torch.amp.autocast("cuda", enabled=use_amp):
-                output = encoder(**inputs)
-                pooled = mean_pool(output.last_hidden_state, inputs["attention_mask"])
-                logits = rmc_head(pooled.float()).cpu().numpy()
-            similarities, indices = classifier.retrieve(query)
-            return comparator.fuse(rmc_config, logits, similarities, train_labels[indices])[0]
+        pipelines = {
+            "RM-a": (
+                ("encoder", inference(lambda _: model.base_model(**inputs).pooler_output)),
+                ("classification head", inference(lambda pooled: model.classifier(model.dropout(pooled)))),
+            ),
+            "RM-b": (
+                ("encoder", inference(frozen_encoder)),
+                ("classification head", inference(lambda pooled: head(pooled))),
+            ),
+            "RM-c": (
+                ("encoder", inference(frozen_encoder)),
+                ("classification head", inference(lambda pooled: (pooled, rmc_head(pooled).float().cpu().numpy()))),
+                ("retrieval FAISS", lambda state: (state[1], *classifier.retrieve(state[0].cpu().numpy()))),
+                ("fusi", lambda state: comparator.fuse(rmc_config, state[0], state[1], train_labels[state[2]])[0]),
+            ),
+        }
 
-        with torch.no_grad(), torch.amp.autocast("cuda", enabled=use_amp):
-            rma_pooled = model.base_model(**inputs).pooler_output
-            frozen_pooled = mean_pool(
-                encoder(**inputs).last_hidden_state, inputs["attention_mask"]
-            ).float()
-            rmc_logits = rmc_head(frozen_pooled).cpu().numpy()
-
-        def rma_encoder():
-            with torch.no_grad(), torch.amp.autocast("cuda", enabled=use_amp):
-                return model.base_model(**inputs).pooler_output
-
-        def rma_head():
-            with torch.no_grad(), torch.amp.autocast("cuda", enabled=use_amp):
-                return model.classifier(model.dropout(rma_pooled))
-
-        def frozen_encoder():
-            with torch.no_grad(), torch.amp.autocast("cuda", enabled=use_amp):
-                output = encoder(**inputs)
-                return mean_pool(output.last_hidden_state, inputs["attention_mask"])
-
-        def rmb_head():
-            with torch.no_grad():
-                return head(frozen_pooled)
-
-        def rmc_head_only():
-            with torch.no_grad():
-                return rmc_head(frozen_pooled).cpu().numpy()
-
-        def retrieval_and_fusion():
-            similarities, indices = classifier.retrieve(query)
-            return comparator.fuse(rmc_config, rmc_logits, similarities, train_labels[indices])[0]
-
-        self._latency_breakdown(
-            (
-                ("RM-a", "encoder", rma_encoder),
-                ("RM-a", "classification head", rma_head),
-                ("RM-b", "encoder", frozen_encoder),
-                ("RM-b", "classification head", rmb_head),
-                ("RM-c", "encoder", frozen_encoder),
-                ("RM-c", "classification head", rmc_head_only),
-                ("RM-c", "retrieval dan fusi", retrieval_and_fusion),
-            )
-        )
-
-        rows = []
-        for scenario, predict in (
-            ("RM-a", infer_rma),
-            ("RM-b", infer_rmb),
-            ("RM-c", infer_rmc),
-        ):
+        totals, components = [], []
+        for scenario, stages in pipelines.items():
             if self.device.type == "cuda":
                 torch.cuda.empty_cache()
             self.profiler.reset_peak_memory()
-            latency = self.profiler.measure_latency(predict)
+            per_stage = self.profiler.measure_stages(stages)
             memory = self.profiler.peak_gpu_memory_mb()
-            rows.append(
+            repeats = {"latency_warmup_runs": self.profiler.n_warmup, "latency_runs": self.profiler.n_runs}
+            components.extend(
+                {"scenario": scenario, "component": name, "latency_ms": round(value, 4), **repeats}
+                for name, value in per_stage.items()
+            )
+            totals.append(
                 {
                     "scenario": scenario,
-                    "infer_latency_ms": round(latency, 4),
+                    "infer_latency_ms": round(sum(per_stage.values()), 4),
                     "infer_peak_gpu_mem_mb": round(memory, 1),
+                    **repeats,
                 }
             )
             logger.info(
-                "[final] %s: %.3f ms/sampel | peak %.0f MB", scenario, latency, memory
+                "[final] %s: %.3f ms/sampel | peak %.0f MB", scenario, totals[-1]["infer_latency_ms"], memory
             )
 
-        frame = pd.DataFrame(rows)
+        write_csv(self.out_dir / "metrics" / "latency_breakdown.csv", pd.DataFrame(components))
+        frame = pd.DataFrame(totals)
         write_csv(self.out_dir / "metrics" / "inference_benchmark.csv", frame)
         return frame
 
-    def _latency_breakdown(self, components) -> pd.DataFrame:
-        """Latency tiap komponen inferensi, diukur terpisah satu per satu.
+    def _prepare_second_candidates(self, candidates: dict[str, object]) -> dict[str, object]:
+        """Muat model kandidat #2 tiap skenario, tanpa membuka split test.
 
-        Jumlah komponen mendekati latency ujung ke ujung tetapi tidak persis sama,
-        karena tiap pengukuran punya overhead pemanggilan dan sinkronisasinya sendiri.
+        Checkpoint RM-a #2 diambil dari `rma_top/`. Bila tidak ada, ia dilatih
+        ulang sebagai jalan terakhir dan F1 validation-nya WAJIB cocok dengan log
+        (toleransi 0,05 pp); bila tidak cocok, benchmark berhenti.
         """
-        rows = []
-        for scenario, component, predict in components:
-            if self.device.type == "cuda":
-                torch.cuda.empty_cache()
-            rows.append(
-                {
-                    "scenario": scenario,
-                    "component": component,
-                    "latency_ms": round(self.profiler.measure_latency(predict), 4),
-                }
+        prepared: dict[str, object] = {}
+        for scenario, entry in candidates["scenarios"].items():
+            second = entry.get("second")
+            if not second:
+                continue
+            config = parse_config(scenario, second["config"])
+            if scenario == "rma":
+                prepared[scenario] = self._rma_candidate_model(second, config)
+            elif scenario == "rmb":
+                prepared[scenario] = self._load_rmb_head(int(second["run_id"]))
+            else:
+                prepared[scenario] = (self._load_rmb_head(int(config.rmb_run_id)), config)
+        return prepared
+
+    def _rma_candidate_model(self, second: dict[str, object], config):
+        path = self.rma_top_dir / f"run_{int(second['run_id'])}.pt"
+        model = build_finetune_model(self.data.tokenizer, model_name=self.model_name).to(self.device)
+        if path.exists():
+            checkpoint = torch.load(path, map_location=self.device, weights_only=True)
+            model.load_state_dict(checkpoint["model_state"])
+            return model.eval()
+
+        logger.warning("Checkpoint RM-a #%d tidak ada; dilatih ulang lalu diverifikasi", second["run_id"])
+        result, model = RMATrainer(self.data).train(config)
+        drift_pp = abs(float(result.best_metrics["f1_macro"]) - float(second["val_f1_macro"])) * 100
+        if drift_pp > REPRODUCTION_TOLERANCE_PP:
+            raise RuntimeError(
+                f"RM-a kandidat #2 (run #{second['run_id']}) tidak mereproduksi F1 validation "
+                f"tercatat ({drift_pp:.3f} pp > {REPRODUCTION_TOLERANCE_PP} pp); benchmark dihentikan "
+                "sebelum test dibuka"
             )
+        model.load_state_dict(result.best_state)
+        return model.eval()
+
+    def _candidate_test_table(
+        self,
+        candidates: dict[str, object],
+        seconds: dict[str, object],
+        test_metrics: dict[str, dict[str, float | int]],
+    ) -> pd.DataFrame:
+        features = self.features
+        labels = features.labels["test"]
+        rows = []
+        for scenario, entry in candidates["scenarios"].items():
+            ranked = [(1, entry["first"], test_metrics[scenario])]
+            if entry.get("second"):
+                ranked.append((2, entry["second"], self._second_test_metrics(scenario, seconds[scenario], labels)))
+            for rank, candidate, metrics in ranked:
+                rows.append(
+                    {
+                        "scenario": scenario,
+                        "rank": rank,
+                        "run_id": candidate["run_id"],
+                        "config": json.dumps(candidate["config"]),
+                        "val_f1_macro": candidate["val_f1_macro"],
+                        "test_f1_macro": round(float(metrics["f1_macro"]), METRIC_PRECISION),
+                        "test_f1_judi": round(float(metrics["f1_class1"]), METRIC_PRECISION),
+                        "candidates_sha256": candidates["content_sha256"],
+                    }
+                )
         frame = pd.DataFrame(rows)
-        write_csv(self.out_dir / "metrics" / "latency_breakdown.csv", frame)
+        write_csv(self.out_dir / "metrics" / "candidates_test.csv", frame)
         return frame
+
+    def _second_test_metrics(self, scenario: str, prepared, labels: np.ndarray) -> dict[str, float | int]:
+        if scenario == "rma":
+            metrics, *_ = RMATrainer(self.data).evaluate_test(prepared)
+            return metrics
+        if scenario == "rmb":
+            with torch.no_grad():
+                logits = prepared(torch.tensor(self.features.embeddings["test"], device=self.device))
+            return self.evaluator.metrics(labels, logits.argmax(1).cpu().numpy())
+        head, config = prepared
+        metrics, _ = RMCEvaluator(self.features, head, self.device).evaluate(config, split="test")
+        return metrics
 
     def _comparison_table(
         self,

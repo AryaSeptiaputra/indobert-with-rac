@@ -43,7 +43,7 @@ tidak ada UI.
 
 ```
 01_eda → 02_preprocessing → 03a_rma → 03b_rmb → 03c_rmc
-       → 05_final_benchmark → 06_analysis_export → 04_bab4_artifacts
+       → 05_final_benchmark → 06_artifacts → 07_archive
 ```
 
 Jangan lewati `02_preprocessing.ipynb`: notebook model bergantung padanya.
@@ -54,12 +54,22 @@ head RM-b x alpha x k). Ketiganya menulis ke `outputs/tuning/`, folder yang juga
 dibaca 05 dan 06. Tahap RM-b menyimpan state setiap head di
 `checkpoints/rmb_heads/`; RM-c memuat head itu, tidak melatih ulang.
 
-`04_bab4_artifacts.ipynb` membangkitkan Gambar 4.1-4.8 dari log kampanye
-(`src/services/thesis_figures.py`, keluaran `figures/bab4/`). Gambar 4.1-4.4
-cukup butuh 03a-03c; gambar 4.5-4.8 butuh 05, jadi jalankan 04 lagi setelah 05.
+Urutan penting di 03c: grid seluruh head → `decide_rmc_champion()` (default di
+head RM-b resmi, penantang seluruh head, bootstrap berpasangan 10.000 iterasi) →
+cek `weighting=uniform` → putusan ulang → `select_candidates()` menulis
+`candidates.json` (kandidat #1 dan #2 tiap skenario, cap waktu dan hash) SEBELUM
+test dibuka. 05 berhenti bila lingkungan berbeda dari saat tuning
+(`verify_hardware`) atau hash kandidat tidak cocok.
+
+`06_artifacts.ipynb` (setelah 05) membangkitkan Gambar 4.1-4.8
+(`thesis_figures.py`) dan data mentah Tabel 4.1-4.19 serta L.1
+(`thesis_data.py`, satu sheet per tabel di `artifacts/data_tabel.xlsx`); tabel
+siap tempel TIDAK dibuat, disusun manual saat penulisan. `07_archive.ipynb`
+dijalankan terakhir supaya artefak ikut terbungkus arsip. Nomor 04 sengaja
+kosong.
 
 ```bash
-pytest        # 376 test, tanpa GPU
+pytest        # 425 test, tanpa GPU
 ```
 
 ## Arsitektur
@@ -95,7 +105,13 @@ data/raw/data_labeling.csv
 | `src/services/campaign.py` | `CampaignRunner` — orkestrasi run, batch, benchmark final |
 | `src/services/run_log.py` | `RunLogger`, `HistoryWriter`, `BestTracker` |
 | `src/services/reporting.py` | `FigureReporter` |
-| `src/services/thesis_figures.py` | `ThesisFigureBuilder`: Gambar 4.1-4.8 Bab 4 (PNG 300 dpi + PDF) langsung dari log |
+| `src/services/thesis_figures.py` | `ThesisFigureBuilder`: Gambar 4.1-4.8 (PNG 300 dpi + PDF) langsung dari log |
+| `src/services/thesis_data.py` | `ThesisDataExporter`: data mentah Tabel 4.1-4.19 dan L.1 ke `data_tabel.xlsx` |
+| `src/services/rac_summary.py` | Ringkasan RAC per head (baseline alpha=0), urutan run RM-c |
+| `src/services/candidates.py` | Kandidat #1/#2 tiap skenario, `candidates.json` berhash |
+| `src/services/environment.py` | Spesifikasi lingkungan, sesi tuning, gate lingkungan benchmark final |
+| `src/services/preprocessing_stats.py` | Baris terbuang per kelas di guard, tingkat [UNK] sebelum/sesudah NFKC |
+| `src/services/number_format.py` | Koma desimal dan pembulatan setengah ke atas untuk anotasi gambar |
 | `src/services/faiss_benchmark.py` | `FaissBenchmark` |
 | `src/services/aggregation.py` | `RunMerger` |
 | `src/services/workbook.py` | `WorkbookBuilder` |
@@ -150,7 +166,7 @@ masuk grid mana pun.
 `outputs/` di-gitignore (kecuali figur EDA dan README): hasil run tidak disimpan di
 git, karena `runs_*.csv` dan `best.json` yang ikut ter-clone membuat kampanye baru
 melewati semua konfigurasi (resume) dan tidak menghasilkan checkpoint juara. Amankan
-hasil dengan sel "Arsipkan hasil" di `06_analysis_export.ipynb` (`ResultArchiver`)
+hasil dengan sel "Arsipkan hasil" di `07_archive.ipynb` (`ResultArchiver`)
 sebelum instance dihancurkan.
 
 - `runs_{rma,rmb,rmc}.csv` — satu baris per run, menumpuk lintas sesi. Memuat
@@ -166,8 +182,20 @@ sebelum instance dihancurkan.
   instance baru pulihkan dengan `runner.restore_checkpoints()`, karena menjalankan
   ulang skenario tidak membuat checkpoint juara kembali (F1 sama tidak dipromosikan).
   `checkpoints/rmb_heads/run_{id}.pt` menyimpan SETIAP head RM-b (bukan hanya
-  juara). `checkpoints/rmc_best.pt` memuat head yang dipakai juara RM-c beserta
-  konfigurasi fusinya.
+  juara). `checkpoints/rma_top/` menyimpan checkpoint tiga run RM-a teratas secara
+  bergulir (untuk kandidat #2). `checkpoints/rmc_best.pt` memuat head yang dipakai
+  juara RM-c beserta konfigurasi fusinya.
+- `hardware.json` — lingkungan (GPU, VRAM, driver, CUDA, CPU, RAM, OS, versi
+  Python/torch/transformers/faiss, seed), `tuning_sessions` (waktu catat dan boot),
+  dan `final_session`.
+- `rmc_champion_decision.json` — default, penantang, bootstrap, putusan, catatan biaya.
+- `candidates.json` — kandidat #1/#2 tiap skenario, cap waktu, `content_sha256`.
+- `metrics/` dari 05: `final_comparison.csv`, `final_predictions.csv`,
+  `candidates_test.csv`, `inference_benchmark.csv`, `latency_breakdown.csv`,
+  `index_stats.json`, `success_criteria.csv`.
+- `artifacts/gambar/` dan `artifacts/data_tabel.xlsx` dari 06.
+- `outputs/preprocessing/preprocessing_stats.json` dari 02 (di luar `metadata.json`
+  supaya tidak menyentuh area gate checksum).
 
 `outputs/_archive_*/` berisi hasil kampanye Vast.ai lama. Disimpan sebagai jalan
 mundur sampai kampanye lokal terbukti berhasil, lalu dihapus. Jangan dipakai
@@ -201,9 +229,12 @@ dimuat notebook 03a-03c).
 **RM-c adalah satu grid: seluruh head RM-b x `alpha x k`.** Head dipilih lewat
 `rmb_run_id` di `RMCConfig` (kosong berarti juara RM-b), dan 66 konfigurasi
 `alpha x k` di `RMC_TUNING_GRID.csv` diterapkan ke setiap head; setiap kombinasi
-satu baris `runs_rmc.csv`. Tahap 2 mencoba `weighting=uniform` sekali di sel juara.
-Dengan ratusan kandidat, pemenang mentah rawan bias seleksi: baca `is_tie_with_best`
-dan kenaikan per head terhadap `alpha=0`, bukan hanya juara mekanis. RM-c tidak
+satu baris `runs_rmc.csv`. Juara RM-c TIDAK dipilih mekanis: default adalah
+konfigurasi terbaik pada head RM-b resmi, dan penantang seluruh head hanya
+menggantikannya bila selisihnya > 0,15 pp DAN batas bawah CI95 bootstrap
+berpasangan > 0 (`decide_rmc_champion`). Bila penantang menang dengan head lain,
+biaya RM-c adalah biaya head itu (`head_is_official_rmb=False`). Tahap 2 mencoba
+`weighting=uniform` sekali di sel juara, lalu putusan dibuat ulang. RM-c tidak
 melatih apa pun, tetapi biayanya adalah biaya head yang dipakainya (bukan nol)
 ditambah retrieval saat inferensi.
 

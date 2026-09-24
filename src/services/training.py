@@ -538,6 +538,7 @@ class RMCEvaluator:
         extras: dict[str, object] = {
             "eval_time_s": elapsed,
             "index_vectors": classifier.index_size,
+            "index_type": classifier.index_type,
             "preds": predictions,
             "p_judi": p_final[:, 1],
         }

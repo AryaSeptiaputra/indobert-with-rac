@@ -254,5 +254,26 @@ class BestTracker:
         )
         return True
 
+    def replace(self, scenario: str, payload: dict[str, object]) -> None:
+        """Ganti juara satu skenario tanpa membandingkan F1-macro.
+
+        Untuk putusan dengan aturan lain daripada `update`, misalnya penantang RM-c
+        yang harus lolos ambang seri dan bootstrap sebelum menggantikan default.
+
+        Args:
+            scenario: Kode skenario.
+            payload: Ringkasan juara baru, minimal memuat `val_f1_macro`.
+
+        Raises:
+            KeyError: Kalau `payload` tidak memuat `val_f1_macro`.
+            OSError: Kalau penulisan gagal.
+        """
+        if "val_f1_macro" not in payload:
+            raise KeyError("payload harus memuat 'val_f1_macro'")
+
+        self.data[scenario] = payload
+        write_json(self.path, self.data)
+        logger.info("Juara %s diganti: val F1-macro %.4f", scenario, float(payload["val_f1_macro"]))
+
 
 __all__ = ["RunLogger", "HistoryWriter", "BestTracker", "CorruptArtifactError"]

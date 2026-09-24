@@ -127,16 +127,21 @@ class TextCleaner:
         """
         return unicodedata.normalize("NFKC", self._invisible_re.sub("", str(text)))
 
-    def clean(self, text: object) -> str:
+    def clean(self, text: object, apply_nfkc: bool = True) -> str:
         """NFKC, ganti URL/mention/angka dengan placeholder, rapikan whitespace.
 
         Args:
             text: Teks komentar mentah.
+            apply_nfkc: Terapkan normalisasi NFKC. False hanya dipakai untuk
+                mengukur dampak NFKC (pembersihan yang sama tanpa langkah NFKC);
+                pipeline latih selalu memakai True.
 
         Returns:
             Teks bersih siap ditokenisasi.
         """
-        cleaned = self.normalize_nfkc(text)
+        cleaned = (
+            self.normalize_nfkc(text) if apply_nfkc else self._invisible_re.sub("", str(text))
+        )
         cleaned = self._url_re.sub(self.url_placeholder, cleaned)
         cleaned = self._mention_re.sub(self.mention_placeholder, cleaned)
         cleaned = self._num_re.sub(self.num_placeholder, cleaned)
@@ -180,6 +185,7 @@ class DatasetBuilder:
         self.ratios = ratios
         self.counts: dict[str, int] = {}
         self.label_conflict: dict[str, object] = {}
+        self.leakage_removed_by_class: dict[str, dict[str, int]] = {}
 
     def resolve_label_conflicts(
         self,
@@ -374,11 +380,17 @@ class DatasetBuilder:
         seen: set[str] = set(splits["train"][TEXT_COLUMN])
         filtered = {"train": splits["train"]}
         removed = 0
+        self.leakage_removed_by_class = {}
 
         for name in ("val", "test"):
             frame = splits[name]
-            kept = frame[~frame[TEXT_COLUMN].isin(seen)].reset_index(drop=True)
+            dropped = frame[TEXT_COLUMN].isin(seen)
+            kept = frame[~dropped].reset_index(drop=True)
             removed += len(frame) - len(kept)
+            self.leakage_removed_by_class[name] = {
+                str(label): int(count)
+                for label, count in frame.loc[dropped, LABEL_COLUMN].value_counts().sort_index().items()
+            }
             filtered[name] = kept
             seen |= set(kept[TEXT_COLUMN])
 

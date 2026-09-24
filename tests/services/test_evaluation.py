@@ -115,3 +115,47 @@ class TestEfficiencyProfiler:
         """Latency RM-a/b/c hanya sebanding bila diukur dengan protokol identik."""
         first, second = EfficiencyProfiler(), EfficiencyProfiler()
         assert (first.n_warmup, first.n_runs) == (second.n_warmup, second.n_runs)
+
+
+class TestBootstrapBerpasangan:
+    def test_prediksi_identik_selisih_nol(self) -> None:
+        from src.services.evaluation import paired_bootstrap_f1
+
+        y = np.array([0, 1] * 50)
+        hasil = paired_bootstrap_f1(y, y, y, n_boot=500)
+        assert hasil["observed_delta_pp"] == hasil["ci_low_pp"] == hasil["ci_high_pp"] == 0.0
+
+    def test_penantang_lebih_baik_selisih_positif(self) -> None:
+        from src.services.evaluation import paired_bootstrap_f1
+
+        y = np.array([0, 1] * 100)
+        buruk = y.copy()
+        buruk[:40] = 1 - buruk[:40]
+        hasil = paired_bootstrap_f1(y, y, buruk, n_boot=2_000)
+        assert hasil["observed_delta_pp"] > 0
+        assert hasil["ci_low_pp"] > 0
+        assert hasil["n_boot"] == 2_000 and hasil["n_samples"] == 200
+
+    def test_seed_tetap_hasil_tetap(self) -> None:
+        from src.services.evaluation import paired_bootstrap_f1
+
+        rng = np.random.default_rng(1)
+        y, a, b = (rng.integers(0, 2, 300) for _ in range(3))
+        assert paired_bootstrap_f1(y, a, b, n_boot=300) == paired_bootstrap_f1(y, a, b, n_boot=300)
+
+
+class TestLatencyBertahap:
+    def test_keluaran_tahap_diteruskan_dan_urutan_dipertahankan(self) -> None:
+        from src.services.evaluation import EfficiencyProfiler
+
+        seen = []
+        stages = (
+            ("encoder", lambda _: 2),
+            ("classification head", lambda value: seen.append(value) or value * 3),
+            ("fusi", lambda value: seen.append(value)),
+        )
+        result = EfficiencyProfiler(n_warmup=1, n_runs=4).measure_stages(stages)
+        assert list(result) == ["encoder", "classification head", "fusi"]
+        assert all(value >= 0 for value in result.values())
+        assert seen[:2] == [2, 6]
+        assert len(seen) == 2 * (1 + 4)

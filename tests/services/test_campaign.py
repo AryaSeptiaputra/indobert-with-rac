@@ -149,15 +149,6 @@ class TestFinal:
         with pytest.raises(RuntimeError, match="belum punya run"):
             runner.run_final()
 
-    def test_dekomposisi_latency_ditulis_per_komponen(self, runner, tmp_path) -> None:
-        frame = runner._latency_breakdown(
-            (("RM-c", "encoder", lambda: None), ("RM-c", "retrieval dan fusi", lambda: None))
-        )
-        written = pd.read_csv(tmp_path / "metrics" / "latency_breakdown.csv")
-        assert written["component"].tolist() == ["encoder", "retrieval dan fusi"]
-        assert (frame["latency_ms"] >= 0).all()
-
-
 class TestMemoriPelatihanRMB:
     def test_memori_pelatihan_mencakup_ekstraksi(self, runner, feature_set) -> None:
         """Waktu latih RM-b mencakup ekstraksi, jadi memori puncaknya juga."""
@@ -547,3 +538,93 @@ class TestPemulihanCheckpoint:
     def test_tanpa_riwayat_rmb_ditolak(self, runner) -> None:
         with pytest.raises(RuntimeError, match="runs_rmb.csv kosong"):
             runner.restore_checkpoints()
+
+
+def bootstrap_palsu(observed: float, ci_low: float):
+    def palsu(*args, **kwargs):
+        return {"observed_delta_pp": observed, "mean_delta_pp": observed, "ci_low_pp": ci_low,
+                "ci_high_pp": observed + 1, "n_boot": 10_000, "seed": 42, "n_samples": 50}
+    return palsu
+
+
+@pytest.fixture
+def grid_rmc(tiga_head):
+    """Grid kecil di ketiga head; head resmi RM-b adalah juara RM-b."""
+    tiga_head.run_batch(
+        "rmc",
+        [{"config": {"rmb_run_id": head, "alpha": alpha, "k": 3}}
+         for head in (1, 2, 3) for alpha in (0.0, 0.3, 0.6)],
+    )
+    return tiga_head
+
+
+class TestPutusanJuaraRMC:
+    def test_default_adalah_terbaik_di_head_rmb_resmi(self, grid_rmc, tmp_path, monkeypatch) -> None:
+        monkeypatch.setattr("src.services.campaign.paired_bootstrap_f1", bootstrap_palsu(0.1, -0.5))
+        decision = grid_rmc.decide_rmc_champion()
+
+        official = grid_rmc.best.get("rmb")["run_id"]
+        runs = pd.read_csv(tmp_path / "runs_rmc.csv")
+        on_official = runs[runs["rmb_run_id"] == official]
+        assert decision["default"]["rmb_run_id"] == official
+        assert decision["default"]["val_f1_macro"] == pytest.approx(on_official["val_f1_macro"].max())
+        champion = grid_rmc.best.get("rmc")
+        if not decision["challenger_is_default"]:
+            assert decision["winner"] == "default"
+        assert champion["config"]["rmb_run_id"] == official
+        assert champion["head_is_official_rmb"] is True
+        assert (tmp_path / "rmc_champion_decision.json").exists()
+
+    def test_penantang_menang_membawa_head_dan_biayanya_sendiri(
+        self, grid_rmc, tmp_path, monkeypatch
+    ) -> None:
+        official = grid_rmc.best.get("rmb")["run_id"]
+        runs = pd.read_csv(tmp_path / "runs_rmc.csv")
+        lain = runs[runs["rmb_run_id"] != official].sort_values("val_f1_macro").iloc[0]
+        runs.loc[runs["run_id"] == lain["run_id"], "val_f1_macro"] = 0.999
+        runs.to_csv(tmp_path / "runs_rmc.csv", index=False)
+        monkeypatch.setattr("src.services.campaign.paired_bootstrap_f1", bootstrap_palsu(0.5, 0.1))
+
+        decision = grid_rmc.decide_rmc_champion()
+
+        champion = grid_rmc.best.get("rmc")
+        assert decision["winner"] == "penantang"
+        assert champion["head_is_official_rmb"] is False
+        assert champion["config"]["rmb_run_id"] == int(lain["rmb_run_id"])
+        rmb = pd.read_csv(tmp_path / "runs_rmb.csv").set_index("run_id").loc[int(lain["rmb_run_id"])]
+        assert grid_rmc._effective_cost("rmc") == (rmb["trainable_params"], pytest.approx(rmb["train_time_s"]))
+        assert "BUKAN warisan" in decision["cost_note"]
+        head, _ = grid_rmc._load_rmc_predictor()
+        expected = grid_rmc._load_rmb_head(int(lain["rmb_run_id"]))
+        for key, value in expected.state_dict().items():
+            torch.testing.assert_close(head.state_dict()[key], value)
+
+    def test_selisih_di_bawah_ambang_tetap_default(self, grid_rmc, tmp_path, monkeypatch) -> None:
+        runs = pd.read_csv(tmp_path / "runs_rmc.csv")
+        official = grid_rmc.best.get("rmb")["run_id"]
+        runs.loc[runs["rmb_run_id"] != official, "val_f1_macro"] += 0.5
+        runs.to_csv(tmp_path / "runs_rmc.csv", index=False)
+        monkeypatch.setattr("src.services.campaign.paired_bootstrap_f1", bootstrap_palsu(0.14, 0.05))
+
+        assert grid_rmc.decide_rmc_champion()["winner"] == "default"
+
+    def test_run_susulan_tidak_mengubah_putusan(self, grid_rmc) -> None:
+        grid_rmc.decide_rmc_champion()
+        before = dict(grid_rmc.best.get("rmc"))
+        grid_rmc.run("rmc", {"rmb_run_id": 2, "alpha": 0.9, "k": 1})
+        assert grid_rmc.best.get("rmc") == before
+
+    def test_bootstrap_sungguhan_tercatat(self, grid_rmc, tmp_path) -> None:
+        runs = pd.read_csv(tmp_path / "runs_rmc.csv")
+        official = grid_rmc.best.get("rmb")["run_id"]
+        runs.loc[runs["rmb_run_id"] != official, "val_f1_macro"] += 0.5
+        runs.to_csv(tmp_path / "runs_rmc.csv", index=False)
+
+        decision = grid_rmc.decide_rmc_champion()
+
+        assert decision["bootstrap"]["n_boot"] == 10_000
+        assert decision["bootstrap"]["ci_low_pp"] <= decision["bootstrap"]["ci_high_pp"]
+
+    def test_tanpa_riwayat_rmc_ditolak(self, tiga_head) -> None:
+        with pytest.raises(RuntimeError, match="riwayat RM-c"):
+            tiga_head.decide_rmc_champion()

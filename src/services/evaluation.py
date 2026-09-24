@@ -154,6 +154,88 @@ class ClassificationEvaluator:
         }
 
 
+BOOTSTRAP_ITERATIONS = 10_000
+BOOTSTRAP_SEED = 42
+BOOTSTRAP_CHUNK = 1_000
+CONFIDENCE_LEVEL_PCT = 95.0
+
+
+def _binary_f1_macro(truth: np.ndarray, predicted: np.ndarray) -> np.ndarray:
+    """F1-macro dua kelas per baris matriks resample."""
+    scores = []
+    for label in (0, 1):
+        true_pos = ((truth == label) & (predicted == label)).sum(axis=1)
+        false_pos = ((truth != label) & (predicted == label)).sum(axis=1)
+        false_neg = ((truth == label) & (predicted != label)).sum(axis=1)
+        denominator = 2 * true_pos + false_pos + false_neg
+        scores.append(np.where(denominator > 0, 2 * true_pos / np.maximum(denominator, 1), 0.0))
+    return np.mean(scores, axis=0)
+
+
+def paired_bootstrap_f1(
+    y_true: np.ndarray,
+    challenger_pred: np.ndarray,
+    incumbent_pred: np.ndarray,
+    n_boot: int = BOOTSTRAP_ITERATIONS,
+    seed: int = BOOTSTRAP_SEED,
+) -> dict[str, float | int]:
+    """Selisih F1-macro penantang terhadap petahana dengan bootstrap berpasangan.
+
+    Baris yang sama di-resample untuk kedua prediksi, sehingga variasi karena
+    sampel sulit saling meniadakan. Hanya untuk klasifikasi biner.
+
+    Args:
+        y_true: Label sebenarnya (N,).
+        challenger_pred: Prediksi penantang (N,).
+        incumbent_pred: Prediksi petahana (N,).
+        n_boot: Jumlah iterasi resample.
+        seed: Seed generator acak.
+
+    Returns:
+        Dict `observed_delta_pp` (selisih pada data asli), `mean_delta_pp`
+        (rata-rata selisih resample), `ci_low_pp` dan `ci_high_pp` (persentil
+        95%), `n_boot`, `seed`, dan `n_samples`; semua selisih dalam poin
+        persentase.
+
+    Raises:
+        ValueError: Kalau panjang ketiga array tidak sama.
+    """
+    y_true = np.asarray(y_true)
+    challenger_pred = np.asarray(challenger_pred)
+    incumbent_pred = np.asarray(incumbent_pred)
+    if not len(y_true) == len(challenger_pred) == len(incumbent_pred):
+        raise ValueError("y_true dan kedua prediksi harus sepanjang sama")
+
+    everything = np.arange(len(y_true))[None, :]
+    observed = (
+        _binary_f1_macro(y_true[everything], challenger_pred[everything])[0]
+        - _binary_f1_macro(y_true[everything], incumbent_pred[everything])[0]
+    )
+
+    rng = np.random.default_rng(seed)
+    deltas = []
+    for start in range(0, n_boot, BOOTSTRAP_CHUNK):
+        size = min(BOOTSTRAP_CHUNK, n_boot - start)
+        rows = rng.integers(0, len(y_true), size=(size, len(y_true)))
+        deltas.append(
+            _binary_f1_macro(y_true[rows], challenger_pred[rows])
+            - _binary_f1_macro(y_true[rows], incumbent_pred[rows])
+        )
+    deltas_pp = np.concatenate(deltas) * 100.0
+
+    tail = (100.0 - CONFIDENCE_LEVEL_PCT) / 2.0
+    low, high = np.percentile(deltas_pp, [tail, 100.0 - tail])
+    return {
+        "observed_delta_pp": float(observed * 100.0),
+        "mean_delta_pp": float(deltas_pp.mean()),
+        "ci_low_pp": float(low),
+        "ci_high_pp": float(high),
+        "n_boot": int(n_boot),
+        "seed": int(seed),
+        "n_samples": int(len(y_true)),
+    }
+
+
 class EfficiencyProfiler:
     """Ukur biaya komputasi: jumlah parameter, memori GPU puncak, dan latency.
 
@@ -200,6 +282,52 @@ class EfficiencyProfiler:
         return 0.0
 
     @torch.no_grad()
+    def measure_stages(
+        self,
+        stages: Sequence[tuple[str, Callable[[object], object]]],
+    ) -> dict[str, float]:
+        """Latency rata-rata tiap tahap dari satu jalur inferensi berurutan.
+
+        Tiap iterasi menjalankan seluruh tahap berurutan; keluaran satu tahap
+        menjadi masukan tahap berikutnya (tahap pertama menerima None). CUDA
+        disinkronkan di batas tiap tahap agar waktunya teratribusi benar, sehingga
+        jumlah seluruh tahap adalah latency jalur itu.
+
+        Args:
+            stages: Pasangan (nama, fungsi satu argumen) sesuai urutan jalur.
+
+        Returns:
+            Latency rata-rata per tahap dalam milidetik, urutan dipertahankan.
+
+        Raises:
+            RuntimeError: Kalau salah satu tahap gagal saat pemanasan.
+        """
+        use_cuda = torch.cuda.is_available()
+
+        def run_once(elapsed: dict[str, float] | None) -> None:
+            value: object = None
+            for name, stage in stages:
+                if use_cuda:
+                    torch.cuda.synchronize()
+                started = time.perf_counter()
+                value = stage(value)
+                if use_cuda:
+                    torch.cuda.synchronize()
+                if elapsed is not None:
+                    elapsed[name] += time.perf_counter() - started
+
+        try:
+            for _ in range(self.n_warmup):
+                run_once(None)
+        except RuntimeError:
+            logger.error("Pemanasan pengukuran latency bertahap gagal", exc_info=True)
+            raise
+
+        elapsed = {name: 0.0 for name, _ in stages}
+        for _ in range(self.n_runs):
+            run_once(elapsed)
+        return {name: total / self.n_runs * 1000.0 for name, total in elapsed.items()}
+
     def measure_latency(self, predict: Callable[[], object]) -> float:
         """Rata-rata waktu satu pemanggilan `predict` dalam milidetik.
 

@@ -181,6 +181,16 @@ class RACClassifier:
         """Jumlah vektor di dalam indeks; 0 bila belum di-`fit`."""
         return 0 if self._index is None else int(self._index.ntotal)
 
+    @property
+    def index_type(self) -> str | None:
+        """Nama kelas indeks FAISS, misalnya `IndexFlatIP`; None sebelum `fit`."""
+        return None if self._index is None else type(self._index).__name__
+
+    @property
+    def index_bytes(self) -> int:
+        """Ukuran indeks terserialisasi dalam byte; 0 sebelum `fit`."""
+        return 0 if self._index is None else int(faiss.serialize_index(self._index).nbytes)
+
     def fit(self, train_embeddings: np.ndarray, train_labels: np.ndarray) -> RACClassifier:
         """Bangun indeks FAISS dari embedding TRAIN.
 

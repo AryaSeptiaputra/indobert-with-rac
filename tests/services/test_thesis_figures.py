@@ -39,6 +39,8 @@ def tulis_log_kampanye(out_dir, final: bool = True) -> None:
              "hidden_dim": 1024, "val_f1_macro": 0.955 + 0.001 * rng.random(),
              "trainable_params": 789_506} for i in range(21)]
     rmb_frame = pd.DataFrame(rmb).assign(
+        lr=2e-4, epochs=5, dropout=0.1, weight_decay=0.01, batch=32, best_epoch=5,
+        val_f1_judi=0.93, extract_time_s=30.0, head_train_time_s=lambda f: 10.0 + f["run_id"],
         train_time_s=lambda f: 40.0 + f["run_id"], peak_mem_mb=30.0,
         extract_peak_mem_mb=850.0, train_peak_mem_mb=850.0,
     )
@@ -79,7 +81,7 @@ def tulis_log_kampanye(out_dir, final: bool = True) -> None:
     pd.DataFrame([
         ("RM-a", "encoder", 5.6), ("RM-a", "classification head", 0.05),
         ("RM-b", "encoder", 5.5), ("RM-b", "classification head", 0.06),
-        ("RM-c", "encoder", 5.5), ("RM-c", "classification head", 0.06), ("RM-c", "retrieval dan fusi", 0.12),
+        ("RM-c", "encoder", 5.5), ("RM-c", "classification head", 0.06), ("RM-c", "retrieval FAISS", 0.10), ("RM-c", "fusi", 0.02),
     ], columns=["scenario", "component", "latency_ms"]).to_csv(metrics / "latency_breakdown.csv", index=False)
     pd.DataFrame({
         "model": ["RM-a", "RM-b", "RM-c"], "test_f1_macro": [0.9745, 0.9580, 0.9630],
@@ -96,6 +98,11 @@ def builder(tmp_path):
 class TestFormatAngka:
     def test_koma_desimal_dan_titik_ribuan(self) -> None:
         assert format_number(1234.567, 2) == "1.234,57"
+
+    def test_pembulatan_setengah_ke_atas(self) -> None:
+        assert format_number(0.125, 2) == "0,13"
+        assert format_number(0.969995, 5) == "0,97000"
+        assert format_number(-0.001, 2, sign=True) == "0,00"
 
     def test_tanda_plus(self) -> None:
         assert format_number(0.214, 2, sign=True) == "+0,21"
@@ -131,14 +138,16 @@ class TestTabelTurunan:
         summary = builder.rac_per_head()
         assert len(summary) == 27
         assert (summary["gain_best_pp"] >= 0).all()
-        assert (summary["val_f1_best"] >= summary["val_f1_shared"] - 1e-12).all()
+        assert (summary["f1_best"] >= summary["f1_shared"] - 1e-12).all()
 
     def test_konfigurasi_bersama_sama_untuk_semua_head(self, builder, tmp_path) -> None:
         summary = builder.rac_per_head()
         assert summary["shared_alpha"].nunique() == summary["shared_k"].nunique() == 1
 
         grid = pd.read_csv(tmp_path / "runs_rmc.csv")
-        means = grid.groupby(["alpha", "k"])["val_f1_macro"].mean()
+        baseline = grid[grid["alpha"] == 0.0].groupby("rmb_run_id")["val_f1_macro"].first()
+        grid["gain"] = grid["val_f1_macro"] - grid["rmb_run_id"].map(baseline)
+        means = grid.groupby(["alpha", "k"])["gain"].mean()
         assert (summary.loc[0, "shared_alpha"], summary.loc[0, "shared_k"]) == means.idxmax()
 
     def test_biaya_rmc_adalah_biaya_head_yang_dipakai_juara(self, builder, tmp_path) -> None:
