@@ -9,11 +9,16 @@ Gaya mengikuti aturan gambar skripsi: Liberation Serif, lebar 5,5 inci, tanpa ju
 di dalam gambar, satu keluarga warna biru-nila yang tetap terbaca bila dicetak
 hitam putih, jingga hanya untuk penanda konfigurasi final, dan koma sebagai
 pemisah desimal.
+
+Pembulatan bawaan Python (dan f-string) memakai representasi biner float,
+sehingga 0,125 bisa menjadi 0,12. Anotasi gambar memakai `Decimal` dengan
+`ROUND_HALF_UP` supaya angka di gambar sama dengan pembulatan manual di tabel.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 import matplotlib
@@ -28,7 +33,6 @@ from matplotlib.patches import Patch, Rectangle  # noqa: E402
 from matplotlib.ticker import FuncFormatter  # noqa: E402
 
 from src.config import CLASS_NAMES, settings  # noqa: E402
-from src.services.number_format import format_number  # noqa: E402
 from src.services.selection import rac_per_head, rmc_grid  # noqa: E402
 from src.utils.io import read_csv, read_json  # noqa: E402
 from src.utils.logger import setup_logger  # noqa: E402
@@ -88,6 +92,25 @@ STYLE = {
 }
 
 
+def round_half_up(value: float, decimals: int) -> Decimal:
+    """Bulatkan setengah ke atas berdasarkan representasi desimal terpendek float."""
+    return Decimal(repr(float(value))).quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_HALF_UP)
+
+
+def format_number(value: float, decimals: int = 2, sign: bool = False) -> str:
+    """Format gaya Indonesia: `1.234,57`; `sign=True` memberi `+` pada nilai positif.
+
+    Nilai yang dibulatkan menjadi nol ditulis tanpa tanda minus.
+    """
+    rounded = round_half_up(value, decimals)
+    if rounded == 0:
+        rounded = abs(rounded)
+    text = f"{rounded:,.{decimals}f}"
+    if sign and rounded > 0:
+        text = "+" + text
+    return text.replace(",", "_").replace(".", ",").replace("_", ".")
+
+
 def format_scientific(value: float) -> str:
     """Format learning rate sebagai mathtext `2 × 10^-5` dengan koma desimal."""
     exponent = int(np.floor(np.log10(abs(value))))
@@ -117,7 +140,7 @@ def text_color_for(rgba: tuple[float, float, float, float]) -> str:
     return "white" if 0.2126 * red + 0.7152 * green + 0.0722 * blue < 0.5 else INK
 
 
-class ThesisFigureBuilder:
+class FigureBuilder:
     """Pembangkit Gambar 4.1 sampai 4.8 untuk satu folder keluaran kampanye.
 
     Args:
@@ -644,4 +667,4 @@ class ThesisFigureBuilder:
         return paths
 
 
-__all__ = ["ThesisFigureBuilder", "format_number", "format_scientific"]
+__all__ = ["FigureBuilder", "format_number", "format_scientific", "round_half_up"]

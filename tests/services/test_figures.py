@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.services.thesis_figures import ThesisFigureBuilder, format_number, format_scientific
+from src.services.figures import FigureBuilder, format_number, format_scientific
 
 LRS = (1e-5, 2e-5, 3e-5, 5e-5)
 EPOCHS = (3, 5, 8)
@@ -92,7 +92,7 @@ def tulis_log_kampanye(out_dir, final: bool = True) -> None:
 @pytest.fixture
 def builder(tmp_path):
     tulis_log_kampanye(tmp_path)
-    return ThesisFigureBuilder(tmp_path)
+    return FigureBuilder(tmp_path)
 
 
 class TestFormatAngka:
@@ -123,14 +123,14 @@ class TestBangunSemua:
 
     def test_sebelum_benchmark_final_gambar_final_dilewati(self, tmp_path) -> None:
         tulis_log_kampanye(tmp_path, final=False)
-        results = ThesisFigureBuilder(tmp_path).build_all()
+        results = FigureBuilder(tmp_path).build_all()
         assert all(isinstance(results[n], list) for n in ("4.1", "4.2", "4.3", "4.4"))
         assert all(str(results[n]).startswith("dilewati") for n in ("4.5", "4.7", "4.8"))
 
     def test_log_hilang_dilaporkan_bila_tidak_dilewati(self, tmp_path) -> None:
         tulis_log_kampanye(tmp_path, final=False)
         with pytest.raises(FileNotFoundError, match="05_final_benchmark"):
-            ThesisFigureBuilder(tmp_path).build_all(skip_missing=False)
+            FigureBuilder(tmp_path).build_all(skip_missing=False)
 
 
 class TestTabelTurunan:

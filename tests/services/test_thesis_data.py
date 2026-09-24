@@ -9,7 +9,7 @@ import pytest
 
 from src.services.selection import build_candidates, write_candidates
 from src.services.thesis_data import ThesisDataExporter
-from tests.services.test_thesis_figures import RMC_CHAMPION_HEAD, tulis_log_kampanye
+from tests.services.test_figures import RMC_CHAMPION_HEAD, tulis_log_kampanye
 
 
 def lengkapi_log(out_dir, tmp_path) -> dict:
