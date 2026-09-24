@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from src.services.selection import build_candidates, write_candidates
-from src.services.thesis_data import ThesisDataExporter
+from src.services.tables import TableDataExporter
 from tests.services.test_figures import RMC_CHAMPION_HEAD, tulis_log_kampanye
 
 
@@ -105,7 +105,7 @@ def exporter(tmp_path):
     out_dir = tmp_path / "tuning"
     out_dir.mkdir()
     paths = lengkapi_log(out_dir, tmp_path)
-    return ThesisDataExporter(out_dir, **paths)
+    return TableDataExporter(out_dir, **paths)
 
 
 class TestEkspor:

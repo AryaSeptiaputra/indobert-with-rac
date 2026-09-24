@@ -81,7 +81,7 @@ def reduction_pct(value: float | None, baseline: float | None) -> float | None:
     return (1.0 - float(value) / float(baseline)) * PP
 
 
-class ThesisDataExporter:
+class TableDataExporter:
     """Kumpulkan data mentah seluruh tabel untuk satu folder keluaran kampanye.
 
     Args:
@@ -694,4 +694,4 @@ class ThesisDataExporter:
         return rac_per_head(self._runs("rmc"), self._runs("rmb"))
 
 
-__all__ = ["TableData", "ThesisDataExporter"]
+__all__ = ["TableData", "TableDataExporter"]
