@@ -21,8 +21,11 @@ penuh per skenario (fungsi yang sebelumnya di `04_tuning_campaign.ipynb`
 sekarang berjalan di masing-masing notebook 03, dengan keluaran ke
 `outputs/tuning/` yang dipakai bersama, bukan lagi `outputs/baseline/`). 03c
 menjalankan RM-c standar (`RMC_TUNING_GRID*.csv`, 66 konfigurasi alpha x k)
-maupun eksplorasi (`RMC_EXPLORATION_GRID.csv`, 133 konfigurasi x seluruh head
-RM-b) plus putusan juara. `04_tuning_campaign.ipynb` akan dialihfungsikan
+maupun eksplorasi (`RMC_EXPLORATION_GRID.csv`, 61 konfigurasi x seluruh head
+RM-b) plus putusan juara. RM-c kembali memakai SATU rumus, fusi linear
+`(1 - alpha) * p_bert + alpha * p_retr`; Rumus 1-4 dikeluarkan dari grid
+eksplorasi (133 → 61 baris, seluruhnya `linear`), kodenya di
+`fusion_ablation.py` dibiarkan tetapi tidak dipakai. `04_tuning_campaign.ipynb` akan dialihfungsikan
 menjadi notebook pembangkit figur untuk jurnal/skripsi (rancangan figur belum
 diputuskan; kontennya masih kampanye lama untuk sementara). Angka kampanye
 lama di ringkasan bawah ini (RTX 3050, 2026-09-02) sudah TIDAK berlaku untuk

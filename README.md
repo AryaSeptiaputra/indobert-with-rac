@@ -111,7 +111,7 @@ git checkout vast.ai
 
 Checkpoint (`outputs/**/checkpoints/`) tidak ikut git, jadi di clone baru harus
 dipulihkan dengan `runner.restore_checkpoints()`; sel untuk itu sudah ada di
-`03c_rmc_rac.ipynb` dan `04_tuning_campaign.ipynb`. Menjalankan ulang 03b atau 04
+`03c_rmc_rac.ipynb`. Menjalankan ulang 03b
 TIDAK membuat checkpoint juara kembali.
 
 Codebase (`src/`, `notebooks/`, `tests/`) identik di ketiga branch — yang
@@ -134,28 +134,28 @@ Seluruh pipeline dijalankan dari notebook, berurutan:
 ```
 01_eda → 02_preprocessing → 03a_rma → 03b_rmb → 03c_rmc
        → 04_tuning_campaign → 05_final_benchmark → 06_analysis_export
-                (RM-a → RM-b → RM-c standar → RM-c eksplorasi, satu sesi)
+   (03a-03c: kampanye RM-a → RM-b → RM-c standar → RM-c eksplorasi, satu mesin)
 ```
 
 | Notebook | Isi |
 |---|---|
 | `01_eda.ipynb` | EDA; mengunci kunci dedup, `max_length`, class weight, placeholder |
 | `02_preprocessing.ipynb` | Membangun split 70:15:15 beserta gate reproduktibilitas |
-| `03a_rma_finetune.ipynb` | Baseline RM-a, satu konfigurasi |
-| `03b_rmb_frozen.ipynb` | Baseline RM-b, ekstraksi fitur beku |
-| `03c_rmc_rac.ipynb` | Baseline RM-c, sweep alpha, dan pembanding empat rumus fusi di satu head |
-| `04_tuning_campaign.ipynb` | Kampanye grid ketiga skenario, ditambah eksplorasi RM-c (seluruh head RM-b x seluruh rumus fusi) dan putusan juara RM-c |
+| `03a_rma_finetune.ipynb` | Kampanye RM-a: kalibrasi biaya, grid `lr x epochs x batch`, coordinate descent `warmup_ratio`/`weight_decay` |
+| `03b_rmb_frozen.ipynb` | Kampanye RM-b: ekstraksi fitur beku dan seluruh grid head; setiap head disimpan |
+| `03c_rmc_rac.ipynb` | Kampanye RM-c (fusi linear): grid standar `alpha x k` di head juara, eksplorasi di seluruh head RM-b, putusan juara |
+| `04_tuning_campaign.ipynb` | Sedang dialihfungsikan menjadi pembangkit figur jurnal dan skripsi (isinya masih kampanye lama, tidak perlu dijalankan) |
 | `05_final_benchmark.ipynb` | Split test dan benchmark inferensi, satu sesi |
 | `06_analysis_export.ipynb` | Biaya FAISS, penggabungan riwayat, ekspor Excel |
 
 Jangan lewati `02_preprocessing.ipynb`: seluruh notebook model bergantung pada
 keluarannya.
 
-03a sampai 03c adalah pengantar dan baseline satu konfigurasi per skenario;
-keluarannya ke `outputs/baseline/` dan tidak dibaca notebook lain. Yang
-menentukan hasil Bab 4 adalah 04 (tuning) lalu 05 (benchmark final). Tahap
-RM-b di 04 menyimpan state SETIAP head di `checkpoints/rmb_heads/`, karena
-eksplorasi RM-c di 04 menguji RAC di atas seluruh head itu.
+03a sampai 03c adalah kampanye tuning sesungguhnya, satu notebook per
+skenario, dengan keluaran ke `outputs/tuning/`. Yang menentukan hasil Bab 4
+adalah 03a-03c (tuning) lalu 05 (benchmark final). Tahap RM-b di 03b menyimpan
+state SETIAP head di `checkpoints/rmb_heads/`, karena eksplorasi RM-c di 03c
+menguji RAC di atas seluruh head itu.
 
 Menjalankan test:
 
@@ -182,7 +182,7 @@ Nilai awal (`src/models/schemas.py`) adalah titik masuk tuning, bukan nilai fina
 | k | — | — | 5 |
 | Optimizer | AdamW | AdamW | — (tanpa training) |
 
-Nilai final ditentukan lewat kampanye di `04_tuning_campaign.ipynb` dan dicatat
+Nilai final ditentukan lewat kampanye di `03a`-`03c` dan dicatat
 di `PROGRESS.md`.
 
 ---
@@ -203,12 +203,10 @@ dan bobot fusinya berjumlah satu, sehingga hasilnya sudah sah. Softmax kedua aka
 meratakan selisih dan bisa mengubah argmax pada kasus nyaris seri. Fusi level
 probabilitas dan level logit tidak ekuivalen.
 
-Itu fusi linear-konveks, rumus produksi RM-c standar. Eksplorasi RM-c di 04
-menguji empat rumus alternatif di seluruh head RM-b (`fusion_ablation.py`): fusi
-level skor (Long dkk., 2022), dua varian alpha adaptif per sampel, dan geometric
-pooling. Rumus fusi juara dicatat di `best.json` dan `checkpoints/rmc_best.pt`;
-bila juara bukan fusi linear, Bab 4 harus menyatakan rumusnya, karena fusi level
-skor dan geometric pooling tidak mengikuti aturan "softmax sekali" di atas.
+Itu fusi linear-konveks, satu-satunya rumus RM-c. Eksplorasi RM-c di 03c memakai
+rumus yang sama di atas seluruh head RM-b; yang disapu hanya head, alpha, dan k.
+Empat rumus alternatif di `fusion_ablation.py` (fusi level skor, alpha adaptif,
+geometric pooling) tidak lagi dipakai kampanye.
 
 ---
 

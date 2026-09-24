@@ -48,11 +48,14 @@ tidak ada UI.
 
 Jangan lewati `02_preprocessing.ipynb`: notebook model bergantung padanya.
 
-03a sampai 03c hanya pengantar dan baseline satu konfigurasi (keluaran ke
-`outputs/baseline/`, tidak dibaca notebook lain). Kampanye sesungguhnya ada di 04,
-dalam satu sesi dan satu mesin: RM-a → RM-b → RM-c standar → eksplorasi RM-c →
-putusan juara RM-c. Tahap RM-b menyimpan state setiap head di
+03a sampai 03c adalah kampanye sesungguhnya, satu notebook per skenario, dalam
+satu mesin dan berurutan: 03a grid RM-a, 03b grid RM-b, 03c RM-c standar →
+eksplorasi RM-c → putusan juara RM-c. Ketiganya menulis ke `outputs/tuning/`, folder
+yang juga dibaca 05 dan 06. Tahap RM-b menyimpan state setiap head di
 `checkpoints/rmb_heads/`; eksplorasi memuat head itu, tidak melatih ulang.
+
+04 sedang dialihfungsikan menjadi notebook pembangkit figur untuk jurnal dan
+skripsi; isinya saat ini masih kampanye lama dan tidak perlu dijalankan.
 
 ```bash
 pytest        # 409 test, tanpa GPU
@@ -86,8 +89,8 @@ data/raw/data_labeling.csv
 | `src/services/features.py` | `FeatureExtractor`, `FeatureSet` |
 | `src/services/training.py` | `RMATrainer`, `RMBTrainer`, `RMCEvaluator` |
 | `src/services/rac.py` | `RACClassifier`, `NeighborCache` |
-| `src/services/fusion_ablation.py` | `FusionFormulaComparator`: fusi linear produksi dan Rumus 1-4 |
-| `src/services/rmc_exploration.py` | `RMCExplorer`: seluruh head RM-b x seluruh rumus fusi; seleksi, Pareto, bootstrap berpasangan |
+| `src/services/fusion_ablation.py` | `FusionFormulaComparator`: evaluator fusi RM-c (kampanye hanya memakai `linear`; Rumus 1-4 masih ada di kode tetapi tidak dipakai) |
+| `src/services/rmc_exploration.py` | `RMCExplorer`: fusi linear di atas seluruh head RM-b x alpha x k; seleksi, Pareto, bootstrap berpasangan |
 | `src/services/evaluation.py` | `ClassificationEvaluator`, `EfficiencyProfiler` |
 | `src/services/campaign.py` | `CampaignRunner` — orkestrasi run, batch, benchmark final |
 | `src/services/run_log.py` | `RunLogger`, `HistoryWriter`, `BestTracker` |
@@ -115,10 +118,10 @@ satu, jadi `p_final` sudah sah; softmax kedua akan meratakan selisih dan bisa
 mengubah argmax pada kasus nyaris seri. Saat menulis Bab 4, nyatakan fusinya di
 level probabilitas — fusi level probabilitas dan level logit tidak ekuivalen.
 
-Itu rumus RM-c standar. Eksplorasi RM-c juga menguji Rumus 1 (fusi level SKOR,
-Long dkk. 2022), Rumus 2 dan 3 (alpha adaptif per sampel), dan Rumus 4 (geometric
-pooling). Bila juara eksplorasi bukan fusi linear, aturan "softmax sekali, level
-probabilitas" di atas tidak berlaku untuknya; nyatakan rumus juaranya di Bab 4.
+Itu SATU-SATUNYA rumus RM-c, baik di lapis standar maupun eksplorasi. Rumus 1-4
+(fusi level skor, alpha adaptif, geometric pooling) sempat diuji lalu dikeluarkan
+dari kampanye (2026-09-24); kodenya masih di `fusion_ablation.py` tetapi tidak
+masuk grid mana pun.
 
 ## Aturan yang tidak boleh dilanggar
 
@@ -162,10 +165,10 @@ sebelum instance dihancurkan.
   instance baru pulihkan dengan `runner.restore_checkpoints()`, karena menjalankan
   ulang skenario tidak membuat checkpoint juara kembali (F1 sama tidak dipromosikan).
   `checkpoints/rmb_heads/run_{id}.pt` menyimpan SETIAP head RM-b (bukan hanya
-  juara). `checkpoints/rmc_best.pt` memuat head dan rumus fusi juara RM-c bila
+  juara). `checkpoints/rmc_best.pt` memuat head dan konfigurasi fusi juara RM-c bila
   juaranya hasil eksplorasi.
 - `rmc_exploration/` — keluaran eksplorasi RM-c: `rmc_exploration_runs.csv` (satu
-  baris per head x konfigurasi fusi), ringkasan per head dan per rumus, dan
+  baris per head x konfigurasi fusi), ringkasan per head, dan
   `champion_decision.json`. Tidak menyentuh `runs_rmc.csv`.
 
 `outputs/_archive_*/` berisi hasil kampanye Vast.ai lama. Disimpan sebagai jalan
@@ -195,13 +198,14 @@ optimal ikut bergeser. Pemenang di tepi grid adalah sinyal untuk melebarkan
 rentang, bukan untuk mengunci.
 
 Rancangan lengkap ada di `tuning_grids/` (`.md` untuk penalaran, `.csv` siap
-dimuat notebook 04).
+dimuat notebook 03a-03c).
 
 **RM-c punya dua lapis.** Standar: fusi linear di atas head juara RM-b
-(`RMC_TUNING_GRID.csv`, 66 konfigurasi). Eksplorasi: SEMUA head RM-b x lima rumus
-fusi x k (`RMC_EXPLORATION_GRID.csv`, 133 konfigurasi per head). Penantang hasil
+(`RMC_TUNING_GRID.csv`, 66 konfigurasi). Eksplorasi: fusi linear yang sama di atas
+SEMUA head RM-b x alpha x k (`RMC_EXPLORATION_GRID.csv`, 61 konfigurasi per head:
+ruang 66 yang sama dikurangi lima baris alpha=0 yang identik). Penantang hasil
 eksplorasi hanya menggantikan juara standar bila selisihnya melampaui ambang seri
-DAN lolos bootstrap berpasangan di validation; dengan ribuan kandidat, pemenang
+DAN lolos bootstrap berpasangan di validation; dengan ratusan kandidat, pemenang
 mentah rawan bias seleksi. RM-c tidak melatih apa pun, tetapi biayanya adalah biaya
 head yang dipakainya (bukan nol) ditambah retrieval saat inferensi.
 
