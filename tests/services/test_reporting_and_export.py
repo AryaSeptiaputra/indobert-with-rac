@@ -6,9 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.services.aggregation import RunMerger
+from src.services.export import RunMerger, WorkbookBuilder
 from src.services.reporting import FigureReporter
-from src.services.workbook import WorkbookBuilder
 from src.utils.io import write_csv, write_json
 
 

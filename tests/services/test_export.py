@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from src.services.archive import NO_HARDWARE_LABEL, ResultArchiver
+from src.services.export import NO_HARDWARE_LABEL, ResultArchiver
 
 
 @pytest.fixture
