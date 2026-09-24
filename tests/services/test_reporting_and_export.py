@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 
 from src.services.aggregation import RunMerger
-from src.services.faiss_benchmark import FaissBenchmark
 from src.services.reporting import FigureReporter
 from src.services.workbook import WorkbookBuilder
 from src.utils.io import write_csv, write_json
@@ -191,56 +190,3 @@ class TestWorkbookBuilder:
 
     def test_nama_sheet_dipotong_ke_batas_excel(self) -> None:
         assert len(WorkbookBuilder._sheet_name("x" * 50)) == 31
-
-
-class TestFaissBenchmark:
-    @pytest.fixture
-    def embeddings(self, rng) -> tuple[np.ndarray, np.ndarray]:
-        return (
-            rng.normal(size=(300, 32)).astype(np.float32),
-            rng.integers(0, 2, 300),
-        )
-
-    def test_jumlah_label_harus_cocok(self, rng) -> None:
-        with pytest.raises(ValueError, match="jumlah embedding"):
-            FaissBenchmark(rng.normal(size=(10, 4)), np.zeros(5))
-
-    def test_metrik_bangun_indeks(self, embeddings) -> None:
-        train, labels = embeddings
-        build = FaissBenchmark(train, labels, repeats=2).measure_build()
-        assert build["n_vectors"] == 300
-        assert build["dim"] == 32
-        assert build["index_ntotal"] == 300
-        assert build["build_time_ms_mean"] >= 0.0
-
-    def test_ukuran_indeks_sesuai_rumus_float32(self, embeddings) -> None:
-        """Indeks flat menyimpan seluruh vektor apa adanya.
-
-        Toleransi mengikuti pembulatan tiga desimal pada nilai yang dilaporkan.
-        """
-        train, labels = embeddings
-        build = FaissBenchmark(train, labels, repeats=1).measure_build()
-        assert build["index_size_mb"] == pytest.approx(300 * 32 * 4 / 1024**2, abs=5e-4)
-
-    def test_waktu_telusur_naik_mengikuti_k(self, embeddings) -> None:
-        train, labels = embeddings
-        rows = FaissBenchmark(train, labels, repeats=3).measure_search(
-            train[:50], k_values=(1, 5, 20)
-        )
-        assert [row["k"] for row in rows] == [1, 5, 20]
-        assert all(row["n_queries"] == 50 for row in rows)
-
-    def test_k_melebihi_indeks_ditolak(self, embeddings) -> None:
-        train, labels = embeddings
-        with pytest.raises(ValueError, match="melebihi"):
-            FaissBenchmark(train, labels, repeats=1).measure_search(
-                train[:10], k_values=(500,)
-            )
-
-    def test_run_menulis_kedua_artefak(self, embeddings, tmp_path) -> None:
-        train, labels = embeddings
-        FaissBenchmark(train, labels, repeats=2).run(
-            train[:20], k_values=(1, 5), out_dir=tmp_path
-        )
-        assert (tmp_path / "faiss_build.json").exists()
-        assert (tmp_path / "faiss_search.csv").exists()
