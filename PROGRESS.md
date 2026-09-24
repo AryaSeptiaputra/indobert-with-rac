@@ -1,7 +1,7 @@
 # PROGRESS — IndoBERT-with-RAC
 
 Status proyek skripsi ITENAS 2026 (trade-off performa versus efisiensi tiga
-strategi adaptasi IndoBERT untuk deteksi komentar judi). Terakhir diperbarui: **2026-09-02**.
+strategi adaptasi IndoBERT untuk deteksi komentar judi). Terakhir diperbarui: **2026-09-24**.
 
 ## Ringkasan tahap
 
@@ -10,9 +10,25 @@ strategi adaptasi IndoBERT untuk deteksi komentar judi). Terakhir diperbarui: **
 | EDA | Selesai | `docs/EDA_REPORT_BAGIAN1/2/3.md`, `outputs/figures/eda/` |
 | Preprocessing | Selesai | `data/processed/`, `DATASET.md` |
 | Penulisan ulang kode ke standar `writer-code` | Selesai | `src/`, `tests/`, `notebooks/` |
-| Kampanye tuning lokal (RTX 3050) | Selesai (RM-a 30, RM-b 27, RM-c 67 run) | `outputs/tuning/` |
-| Benchmark final lokal (TEST, satu sesi) | Selesai | `outputs/tuning/metrics/` |
-| Penulisan Bab 4 | Belum | menunggu angka lokal |
+| Restrukturisasi notebook (03a-c jadi kampanye penuh, 04 rencana jadi figur) | Selesai | `notebooks/03a_rma_finetune.ipynb`, `03b_rmb_frozen.ipynb`, `03c_rmc_rac.ipynb` |
+| Kampanye tuning (RM-a/RM-b/RM-c standar+eksplorasi) | Belum, menunggu rerun di struktur baru | `outputs/tuning/` (kosong) |
+| Benchmark final (TEST, satu sesi) | Belum | `outputs/tuning/metrics/` |
+| Penulisan Bab 4 | Belum | menunggu angka kampanye baru |
+
+**2026-09-24:** `03a_rma_finetune.ipynb`, `03b_rmb_frozen.ipynb`, dan
+`03c_rmc_rac.ipynb` diubah dari pengantar satu-konfigurasi menjadi kampanye
+penuh per skenario (fungsi yang sebelumnya di `04_tuning_campaign.ipynb`
+sekarang berjalan di masing-masing notebook 03, dengan keluaran ke
+`outputs/tuning/` yang dipakai bersama, bukan lagi `outputs/baseline/`). 03c
+menjalankan RM-c standar (`RMC_TUNING_GRID*.csv`, 66 konfigurasi alpha x k)
+maupun eksplorasi (`RMC_EXPLORATION_GRID.csv`, 133 konfigurasi x seluruh head
+RM-b) plus putusan juara. `04_tuning_campaign.ipynb` akan dialihfungsikan
+menjadi notebook pembangkit figur untuk jurnal/skripsi (rancangan figur belum
+diputuskan; kontennya masih kampanye lama untuk sementara). Angka kampanye
+lama di ringkasan bawah ini (RTX 3050, 2026-09-02) sudah TIDAK berlaku untuk
+Bab 4 karena strukturnya berubah; `outputs/tuning/` di working tree ini kosong
+dan belum ada hasil run yang tersimpan di git pada branch `vast.ai` — kampanye
+perlu dijalankan ulang dari `03a` untuk menghasilkan keluaran baru.
 
 ## Keadaan sekarang
 
