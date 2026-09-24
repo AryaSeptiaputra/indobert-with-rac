@@ -74,14 +74,16 @@ class RMBConfig(BaseModel):
 
 
 class RMCConfig(BaseModel):
-    """Hyperparameter RM-c (RAC): bobot fusi, jumlah tetangga, skema pembobotan.
+    """Hyperparameter RM-c (RAC): head RM-b, bobot fusi, jumlah tetangga, pembobotan.
 
     `alpha` membobot cabang retrieval terhadap cabang BERT; `alpha=0` identik
     dengan RM-b murni dan `alpha=1` membuang cabang BERT sepenuhnya.
+    `rmb_run_id` memilih head RM-b yang dipakai; `None` berarti juara RM-b.
     """
 
     model_config = ConfigDict(extra="forbid")
 
+    rmb_run_id: int | None = Field(default=None, ge=1)
     alpha: float = Field(default=0.3, ge=0.0, le=1.0)
     k: int = Field(default=5, ge=1)
     weighting: Weighting = "similarity"

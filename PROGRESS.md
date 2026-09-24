@@ -19,13 +19,17 @@ strategi adaptasi IndoBERT untuk deteksi komentar judi). Terakhir diperbarui: **
 `03c_rmc_rac.ipynb` diubah dari pengantar satu-konfigurasi menjadi kampanye
 penuh per skenario (fungsi yang sebelumnya di `04_tuning_campaign.ipynb`
 sekarang berjalan di masing-masing notebook 03, dengan keluaran ke
-`outputs/tuning/` yang dipakai bersama, bukan lagi `outputs/baseline/`). 03c
-menjalankan RM-c standar (`RMC_TUNING_GRID*.csv`, 66 konfigurasi alpha x k)
-maupun eksplorasi (`RMC_EXPLORATION_GRID.csv`, 61 konfigurasi x seluruh head
-RM-b) plus putusan juara. RM-c kembali memakai SATU rumus, fusi linear
-`(1 - alpha) * p_bert + alpha * p_retr`; Rumus 1-4 dikeluarkan dari grid
-eksplorasi (133 → 61 baris, seluruhnya `linear`), kodenya di
-`fusion_ablation.py` dibiarkan tetapi tidak dipakai. `04_tuning_campaign.ipynb` akan dialihfungsikan
+`outputs/tuning/` yang dipakai bersama, bukan lagi `outputs/baseline/`). RM-c
+kembali memakai SATU rumus, fusi linear `(1 - alpha) * p_bert + alpha * p_retr`,
+dan lapis standar serta eksplorasi dilebur menjadi satu grid: seluruh head RM-b x
+66 konfigurasi `alpha x k` (`RMC_TUNING_GRID.csv`), head dipilih lewat
+`rmb_run_id` di `RMCConfig` sehingga setiap kombinasi tercatat di
+`runs_rmc.csv`, lalu `weighting=uniform` dicek sekali di sel juara. Modul
+`rmc_exploration.py` (putusan bootstrap standar-vs-eksplorasi),
+`RMC_EXPLORATION_GRID.*`, `RMC_TUNING_GRID_STAGE2.csv`, dan
+`BestTracker.replace` dihapus; kode Rumus 1-4 di `fusion_ablation.py` dibiarkan
+tetapi tidak dipakai. Test: 365 lulus. Output sel hasil kampanye lama di 04,
+05, 06, dan 06_lite dikosongkan. `04_tuning_campaign.ipynb` akan dialihfungsikan
 menjadi notebook pembangkit figur untuk jurnal/skripsi (rancangan figur belum
 diputuskan; kontennya masih kampanye lama untuk sementara). Angka kampanye
 lama di ringkasan bawah ini (RTX 3050, 2026-09-02) sudah TIDAK berlaku untuk

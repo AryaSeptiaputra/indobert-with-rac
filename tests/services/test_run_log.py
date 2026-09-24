@@ -157,18 +157,3 @@ class TestBestTracker:
     def test_juara_bertahan_lintas_instance(self, tmp_path) -> None:
         BestTracker(tmp_path).update("rma", {"run_id": 7, "val_f1_macro": 0.97})
         assert BestTracker(tmp_path).get("rma")["run_id"] == 7
-
-    def test_replace_mengganti_juara_walau_f1_lebih_rendah(self, tmp_path) -> None:
-        """Putusan dengan aturan lain (ambang seri, bootstrap) tidak dinilai F1 semata."""
-        tracker = BestTracker(tmp_path)
-        tracker.update("rmc", {"run_id": 1, "val_f1_macro": 0.97})
-        tracker.replace("rmc", {"run_id": None, "val_f1_macro": 0.96, "source": "eksplorasi"})
-        assert tracker.get("rmc")["source"] == "eksplorasi"
-
-    def test_replace_tertulis_ke_berkas(self, tmp_path) -> None:
-        BestTracker(tmp_path).replace("rmc", {"run_id": None, "val_f1_macro": 0.96})
-        assert BestTracker(tmp_path).get("rmc")["val_f1_macro"] == 0.96
-
-    def test_replace_tanpa_f1_ditolak(self, tmp_path) -> None:
-        with pytest.raises(KeyError, match="val_f1_macro"):
-            BestTracker(tmp_path).replace("rmc", {"run_id": 1})

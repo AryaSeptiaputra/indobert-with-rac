@@ -1,21 +1,21 @@
-# RM-c — Rancangan Eksplorasi Hyperparameter (67 run)
+# RM-c — Rancangan Tuning Hyperparameter (seluruh head RM-b x 66 alpha x k)
 
 Dokumen kerja untuk tuning RM-c (RAC — Retrieval-Augmented Classification) lewat
-`04_tuning_campaign.ipynb`. Pola sama dengan `RMA_TUNING_GRID.md`/`RMB_TUNING_GRID.md`,
-disesuaikan karena RM-c **tidak melatih apa pun** — hanya fusi probabilitas head RM-b
-terbaik (`checkpoints/rmb_best.pt`, run #28: `mlp/1024, lr=1e-3, epochs=10, wd=0.0`)
-dengan distribusi hasil retrieval FAISS (`RMCEvaluator` di `src/services/training.py`; index
-dibangun HANYA dari embedding train — anti-leakage, lihat `DATASET.md`).
+`03c_rmc_rac.ipynb`. Pola sama dengan `RMA_TUNING_GRID.md`/`RMB_TUNING_GRID.md`,
+disesuaikan karena RM-c **tidak melatih apa pun** — hanya fusi probabilitas sebuah head
+RM-b dengan distribusi hasil retrieval FAISS (`RMCEvaluator` di `src/services/training.py`;
+index dibangun HANYA dari embedding train — anti-leakage, lihat `DATASET.md`).
 
-> **Catatan:** dokumen ini untuk **RM-c standar** (fusi linear di atas head juara RM-b).
-> Eksplorasi seluruh head RM-b dengan semua rumus fusi ada di `RMC_EXPLORATION_GRID.md`.
-> Juara eksplorasi hanya menggantikan juara standar bila lolos ambang seri dan bootstrap.
+> **Satu grid, satu rumus (2026-09-24).** Sumbu head digrid bersama `alpha × k`: setiap
+> head yang tercatat di `runs_rmb.csv` (state-nya di `checkpoints/rmb_heads/`) dipasangkan
+> dengan 66 konfigurasi di `RMC_TUNING_GRID.csv`, lewat `rmb_run_id` di `RMCConfig`.
+> Rumus fusi hanya fusi linear di bawah. Pemisahan lama "RM-c standar" (head juara RM-b
+> saja) dan "eksplorasi" (seluruh head, lima rumus, putusan bootstrap) sudah dilebur.
 >
-> **CSV yang tersedia** (siap diunggah lewat mode **Batch → Tempel/unggah tabel CSV**):
-> - `RMC_TUNING_GRID.csv` — 66 baris grid `alpha × k` (weighting dikunci `similarity`),
->   tak bergantung hasil apa pun.
-> - `RMC_TUNING_GRID_STAGE2.csv` — 1 baris (`weighting=uniform` di sel yang
->   direkomendasikan `alpha=0,2, k=5`), dibuat setelah Tahap 1 selesai.
+> **CSV yang tersedia:**
+> - `RMC_TUNING_GRID.csv` — 66 baris grid `alpha × k` (weighting dikunci `similarity`).
+>   CSV hanya memuat sumbu fusi; sumbu head dibentuk saat runtime di 03c dari
+>   `runs_rmb.csv`, sehingga jumlah run = 66 × jumlah head.
 
 ---
 
@@ -71,33 +71,27 @@ jadi rujukan tambahan konteks task klasifikasi teks (bukan visual).
 
 ---
 
-## Tahap 2 — Cek `weighting=uniform` di sel pemenang (1 run, BERGANTUNG Tahap 1)
+## Tahap 2 — Cek `weighting=uniform` di sel juara (1 run, BERGANTUNG Tahap 1)
 
-> **Update pasca-Tahap 1:** juara mekanis `best.json` adalah `alpha=0,2, k=1`
-> (val F1-macro 0,969995), tapi kolom `k=1` di seluruh sumbu `alpha` menunjukkan pola
-> tidak stabil (identik persis dari `alpha=0,5` sampai `1,0` — artefak numerik distribusi
-> retrieval biner 1-tetangga; naik-turun tajam di titik lain) — ciri estimator varian
-> tinggi. `alpha=0,2, k=5` (run #15) **seri secara statistik** (delta 0,0092pp, val
-> F1-macro 0,969903) dengan kurva jauh lebih mulus di sepanjang sumbu alpha → **direkomen-
-> dasikan sebagai sel final** menggantikan juara mekanis, demi generalisasi ke TEST yang
-> lebih bisa diandalkan. Tahap 2 di bawah memakai sel ini (`alpha=0,2, k=5`), bukan `k=1`.
+`weighting` hanya berpengaruh bila `alpha > 0` dan relatif independen dari `alpha × k`,
+jadi diuji sekali di sel juara Tahap 1 (head, `alpha`, dan `k` yang sama), bukan digrid.
+03c menyusun baris ini dari `best.json` setelah Tahap 1 selesai; tidak ada CSV terpisah.
 
-Di sel yang direkomendasikan (`alpha=0,2, k=5`), jalankan **satu** run dengan
-`weighting=uniform`. Hasil `weighting=similarity` di sel yang sama **sudah ada** dari
-Tahap 1 (run #15, tak perlu diulang) — jadi cukup 1 run untuk melengkapi perbandingan
-2×1 di sel itu.
-
-**Cara jalan:** `RMC_TUNING_GRID_STAGE2.csv` (folder ini) sudah berisi baris ini, siap
-diunggah lewat mode **Batch → Tempel/unggah tabel CSV**.
+> Catatan kampanye lama (historis, bukan acuan): di grid satu head, juara mekanis
+> `alpha=0,2, k=1` seri secara statistik dengan `alpha=0,2, k=5` yang kurvanya jauh lebih
+> mulus; kolom `k=1` identik dari `alpha=0,5` sampai `1,0`, ciri estimator varian tinggi.
+> Pola seperti ini perlu dibaca lagi di tabel per head sebelum mengunci sel juara.
 
 ---
 
 ## Aturan seleksi (identik RM-a/RM-b)
 
 1. **Metrik utama** `val_f1_macro`; **tie-break** `val_f1_judi`.
-2. **Ambang seri ≤0,15pp** (`TIE_THRESHOLD_PP`) → kalau beberapa sel seri, pilih `alpha`
-   lebih kecil (lebih dekat ke murni head RM-b — lebih sederhana, lebih murah secara
-   konseptual) dan/atau `k` lebih kecil (retrieval lebih murah saat inferensi nyata).
+2. **Ambang seri ≤0,15pp** (`TIE_THRESHOLD_PP`) → kalau beberapa sel seri, pilih head
+   dengan parameter lebih sedikit, lalu `alpha` lebih kecil (lebih dekat ke murni head
+   RM-b) dan/atau `k` lebih kecil (retrieval lebih murah saat inferensi nyata).
+   `best.json` memilih F1 tertinggi secara mekanis; kolom `is_tie_with_best` menandai
+   kandidat seri yang perlu dibaca manual.
 3. **Baca `alpha=0` sebagai baseline wajib** — kalau tak ada `alpha>0` yang mengalahkannya
    secara berarti, itu temuan valid (RAC tak membantu untuk kombinasi head/data ini),
    bukan kegagalan eksperimen.
@@ -110,8 +104,8 @@ diunggah lewat mode **Batch → Tempel/unggah tabel CSV**.
 
 ## Estimasi biaya
 
-66+1 run, semuanya sub-detik/eval (index FAISS ~6,6k vektor, tanpa training) — total
-kampanye **kemungkinan di bawah 1 menit**. Bukan kendala biaya sama sekali; batasan
+66 × jumlah head + 1 run (27 head = 1.783 run), semuanya sub-detik/eval (index FAISS
+~6,6k vektor, tanpa training) — total kampanye **hitungan menit**. Bukan kendala biaya sama sekali; batasan
 sebenarnya tetap disiplin val/test dan ambang tie-break di atas.
 
 ---

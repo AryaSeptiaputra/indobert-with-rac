@@ -8,10 +8,9 @@ Kegagalan satu konfigurasi di dalam batch diisolasi ke `runs_{scenario}_errors.c
 supaya sisa antrean tetap jalan; kampanye lima jam tidak boleh batal karena satu
 nilai yang keliru di baris ke-tiga puluh.
 
-RM-c punya dua lapis: kampanye standar (`run` dan `run_batch` dengan skenario
-"rmc", fusi linear di atas head juara RM-b) dan eksplorasi (`explore_rmc`, seluruh
-head RM-b x seluruh rumus fusi). `decide_rmc_champion` memutuskan apakah juara
-eksplorasi menggantikan juara standar.
+RM-c memilih head RM-b lewat `rmb_run_id` di konfigurasinya, sehingga satu grid
+RM-c adalah seluruh head RM-b x (alpha, k) dengan fusi linear, dijalankan dan
+dicatat seperti skenario lain.
 
 Seluruh seleksi hyperparameter memakai split validation. Split test hanya dibuka
 di `run_final`, sekali, untuk ketiga skenario dalam satu sesi GPU yang sama --
@@ -26,7 +25,6 @@ import subprocess
 import time
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import torch
 from pydantic import ValidationError
@@ -35,22 +33,13 @@ from torch.utils.data import DataLoader
 from src.config import SCENARIOS, settings
 from src.models.comment_dataset import GamblingCommentDataset
 from src.models.heads import build_encoder, build_finetune_model, build_head, mean_pool
-from src.models.schemas import CONFIG_MODELS, RMBConfig, RunRequest, parse_config
+from src.models.schemas import CONFIG_MODELS, RMBConfig, RMCConfig, RunRequest, parse_config
 from src.services.data import ExperimentData
 from src.services.evaluation import RUN_METRIC_KEYS, ClassificationEvaluator, EfficiencyProfiler
 from src.services.features import FeatureExtractor, FeatureSet
 from src.services.fusion_ablation import FusionFormulaComparator, FusionFormulaConfig
 from src.services.rac import RACClassifier, softmax
 from src.services.reporting import FigureReporter
-from src.services.rmc_exploration import (
-    REPRODUCTION_TOLERANCE_PP,
-    RMCExplorer,
-    challenger_wins,
-    paired_bootstrap,
-    select_best,
-    summarize_per_formula,
-    summarize_per_head,
-)
 from src.services.run_log import BestTracker, HistoryWriter, RunLogger
 from src.services.training import RMATrainer, RMBTrainer, RMCEvaluator
 from src.utils.io import read_csv, write_csv, write_json
@@ -74,12 +63,16 @@ DISPLAY_NAMES = {"rma": "RM-a", "rmb": "RM-b", "rmc": "RM-c"}
 # pembacaan ulang dari CSV.
 SIGNATURE_PRECISION = 12
 
+# Selisih F1-macro antara checkpoint yang dibangun ulang dan angka tercatat yang
+# masih dianggap run yang sama; di atas ini dicatat sebagai peringatan.
+REPRODUCTION_TOLERANCE_PP = 0.05
+
 
 class CampaignRunner:
     """Jalankan dan catat run tuning untuk satu folder keluaran.
 
     Data, tokenizer, dan fitur beku dimuat malas lalu dipakai ulang, sehingga
-    menjalankan 67 konfigurasi RM-c hanya memuat encoder sekali.
+    menjalankan ratusan konfigurasi RM-c hanya memuat encoder sekali.
 
     Args:
         out_dir: Folder keluaran; `None` memakai `settings.default_out_dir`.
@@ -148,13 +141,6 @@ class CampaignRunner:
         path.mkdir(parents=True, exist_ok=True)
         return path
 
-    @property
-    def exploration_dir(self) -> Path:
-        """Folder keluaran eksplorasi RM-c, dibuat bila belum ada."""
-        path = self.out_dir / "rmc_exploration"
-        path.mkdir(parents=True, exist_ok=True)
-        return path
-
     def run(
         self,
         scenario: str,
@@ -184,6 +170,8 @@ class CampaignRunner:
             raise ValueError(f"skenario tak dikenal: {scenario!r} (harus salah satu {SCENARIOS})")
 
         parsed = parse_config(scenario, config)
+        if scenario == "rmc":
+            parsed = self._resolve_rmc_head(parsed)
         run_logger = RunLogger(self.out_dir / f"runs_{scenario}.csv")
         run_id = run_logger.next_id()
         logger.info("[%s] RUN #%d %s", scenario, run_id, parsed.model_dump())
@@ -210,7 +198,8 @@ class CampaignRunner:
         (`min(batch, micro_batch)`). Nilai efektif itulah yang menentukan ukuran
         batch di `DataLoader`, dan karena itu menentukan lintasan training;
         `micro_batch=32` pada `batch=16` menghasilkan run yang persis sama
-        dengan `micro_batch=16`.
+        dengan `micro_batch=16`. Untuk RM-c, `rmb_run_id` kosong dinormalkan ke
+        nomor run juara RM-b, yaitu head yang benar-benar dipakai.
 
         Args:
             scenario: Kode skenario.
@@ -224,6 +213,8 @@ class CampaignRunner:
             pydantic.ValidationError: Kalau ada nilai di luar batas.
         """
         parsed = parse_config(scenario, config)
+        if scenario == "rmc":
+            parsed = self._resolve_rmc_head(parsed)
         values = parsed.model_dump()
         if scenario == "rma":
             values["micro_batch"] = parsed.effective_micro_batch
@@ -379,16 +370,6 @@ class CampaignRunner:
         )
         return pd.DataFrame(rows)
 
-    def _load_rmb_heads(self, rmb_runs: pd.DataFrame) -> dict[int, torch.nn.Module]:
-        run_ids = [int(run_id) for run_id in rmb_runs["run_id"]]
-        missing = [run_id for run_id in run_ids if not (self.heads_dir / f"run_{run_id}.pt").exists()]
-        if missing:
-            raise FileNotFoundError(
-                f"head RM-b run {missing} belum tersimpan di {self.heads_dir}; jalankan tahap "
-                "RM-b lagi (resume=False) atau panggil restore_rmb_heads()"
-            )
-        return {run_id: self._load_rmb_head(run_id) for run_id in run_ids}
-
     def restore_rmb_heads(self) -> list[int]:
         """Latih ulang head RM-b yang belum punya state tersimpan.
 
@@ -455,21 +436,14 @@ class CampaignRunner:
             return False
 
         config = dict(champion["config"])
-        source_name = champion.get("source", "standar")
         payload: dict[str, object] = {
             "config": config,
             "run_id": champion.get("run_id"),
             "val_f1_macro": champion["val_f1_macro"],
             "model_name": champion.get("model_name", self.model_name),
-            "source": source_name,
         }
-        if source_name == "eksplorasi":
-            head_checkpoint = self._load_checkpoint(f"rmb_heads/run_{int(config['rmb_run_id'])}.pt")
-            payload.update(
-                head_state=head_checkpoint["head_state"],
-                head_config=head_checkpoint["config"],
-                hidden_size=head_checkpoint["hidden_size"],
-            )
+        if config.get("rmb_run_id") is not None:
+            payload.update(self._head_payload(int(config["rmb_run_id"])))
         torch.save(payload, target)
         return True
 
@@ -532,170 +506,6 @@ class CampaignRunner:
         restored["rma_best"] = self._restore_rma_champion() if include_rma else False
         logger.info("Checkpoint dipulihkan: %s", restored)
         return restored
-
-    def explore_rmc(self, grid: list[FusionFormulaConfig]) -> dict[str, pd.DataFrame]:
-        """Uji seluruh rumus fusi di atas SEMUA head RM-b (validation saja).
-
-        Args:
-            grid: Konfigurasi fusi yang diuji di tiap head, dari
-                `load_exploration_grid`.
-
-        Returns:
-            Dict berisi DataFrame `runs` (satu baris per head x konfigurasi),
-            `per_head`, dan `per_formula`; ketiganya juga ditulis ke
-            `rmc_exploration/`.
-
-        Raises:
-            RuntimeError: Kalau `runs_rmb.csv` kosong.
-            FileNotFoundError: Kalau ada head RM-b yang state-nya belum tersimpan.
-        """
-        rmb_runs = read_csv(self.out_dir / "runs_rmb.csv")
-        if rmb_runs.empty:
-            raise RuntimeError("runs_rmb.csv kosong; jalankan tahap RM-b lebih dulu")
-
-        heads = self._load_rmb_heads(rmb_runs)
-        sweep = RMCExplorer(self.features, self.device, grid).run(rmb_runs, heads)
-        per_head = summarize_per_head(sweep)
-        per_formula = summarize_per_formula(sweep)
-
-        write_csv(self.exploration_dir / "rmc_exploration_runs.csv", sweep)
-        write_csv(self.exploration_dir / "rmc_exploration_per_head.csv", per_head)
-        write_csv(self.exploration_dir / "rmc_exploration_per_formula.csv", per_formula)
-        logger.info(
-            "Eksplorasi RM-c selesai: %d head x %d konfigurasi = %d evaluasi",
-            len(heads), len(grid), len(sweep),
-        )
-        return {"runs": sweep, "per_head": per_head, "per_formula": per_formula}
-
-    def _predict_val(
-        self, head: torch.nn.Module, config: FusionFormulaConfig
-    ) -> np.ndarray:
-        comparator = FusionFormulaComparator(
-            self.features, head, self.device, k=config.k, weighting=config.weighting
-        )
-        _, extras = comparator.evaluate(config, split="val")
-        return extras["preds"]
-
-    def decide_rmc_champion(self, sweep: pd.DataFrame) -> dict[str, object]:
-        """Putuskan apakah juara eksplorasi menggantikan juara RM-c standar.
-
-        Penantang adalah konfigurasi terbaik eksplorasi menurut `select_best`.
-        Ia hanya menggantikan petahana bila selisih F1-macro-nya melampaui ambang
-        seri DAN batas bawah interval bootstrap berpasangan berada di atas nol.
-        Bila menang, `best.json` dan `rmc_best.pt` diganti; `rmc_best.pt` lalu
-        memuat head dan rumus fusinya, dan `run_final` memuat dari sana.
-
-        Args:
-            sweep: Keluaran `explore_rmc` (kunci `runs`).
-
-        Returns:
-            Catatan keputusan; juga ditulis ke `rmc_exploration/champion_decision.json`.
-
-        Raises:
-            RuntimeError: Kalau juara RM-c standar belum ada.
-            FileNotFoundError: Kalau checkpoint head penantang atau petahana hilang.
-        """
-        incumbent = self.best.get("rmc")
-        if not incumbent:
-            raise RuntimeError("juara RM-c standar belum ada; jalankan tahap RM-c standar dulu")
-
-        challenger = select_best(sweep)
-        alpha = challenger["alpha"]
-        challenger_config = FusionFormulaConfig(
-            formula=str(challenger["formula"]),
-            alpha=None if pd.isna(alpha) else float(alpha),
-            k=int(challenger["k"]),
-            weighting=str(challenger["weighting"]),
-        )
-        challenger_run_id = int(challenger["rmb_run_id"])
-        challenger_checkpoint = self._load_checkpoint(f"rmb_heads/run_{challenger_run_id}.pt")
-        challenger_head, _ = self._head_from_checkpoint(challenger_checkpoint)
-        incumbent_head, incumbent_config = self._load_rmc_predictor()
-
-        delta_pp, ci_low_pp, ci_high_pp = paired_bootstrap(
-            self.features.labels["val"],
-            self._predict_val(challenger_head, challenger_config),
-            self._predict_val(incumbent_head, incumbent_config),
-        )
-        wins = challenger_wins(delta_pp, ci_low_pp)
-
-        decision: dict[str, object] = {
-            "decided_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "winner": "eksplorasi" if wins else "standar",
-            "tie_threshold_pp": settings.tie_threshold_pp,
-            "delta_pp": round(delta_pp, 4),
-            "ci95_pp": [round(ci_low_pp, 4), round(ci_high_pp, 4)],
-            "challenger": {
-                "rmb_run_id": challenger_run_id,
-                "formula": challenger_config.formula,
-                "alpha": challenger_config.alpha,
-                "k": challenger_config.k,
-                "weighting": challenger_config.weighting,
-                "val_f1_macro": float(challenger["val_f1_macro"]),
-            },
-            "incumbent": {
-                "config": incumbent["config"],
-                "source": incumbent.get("source", "standar"),
-                "val_f1_macro": float(incumbent["val_f1_macro"]),
-            },
-        }
-
-        if wins:
-            self._promote_exploration_champion(
-                challenger_config, challenger_run_id, challenger_checkpoint, challenger
-            )
-        write_json(self.exploration_dir / "champion_decision.json", decision)
-        logger.info(
-            "Putusan juara RM-c: %s (selisih %+.3f pp, CI95 [%.3f, %.3f])",
-            decision["winner"], delta_pp, ci_low_pp, ci_high_pp,
-        )
-        return decision
-
-    def _promote_exploration_champion(
-        self,
-        config: FusionFormulaConfig,
-        rmb_run_id: int,
-        head_checkpoint: dict[str, object],
-        challenger: pd.Series,
-    ) -> None:
-        champion_config = {
-            "rmb_run_id": rmb_run_id,
-            "formula": config.formula,
-            "alpha": config.alpha,
-            "k": config.k,
-            "weighting": config.weighting,
-        }
-        val_f1 = float(challenger["val_f1_macro"])
-
-        self.best.replace(
-            "rmc",
-            {
-                "run_id": None,
-                "config": champion_config,
-                "val_f1_macro": val_f1,
-                # RM-c sendiri tidak melatih apa pun; biaya head yang dipakainya
-                # dicatat terpisah agar kriteria sukses menghitungnya.
-                "train_time_s": 0.0,
-                "trainable_params": 0,
-                "head_train_time_s": float(challenger["head_train_time_s"]),
-                "head_trainable_params": int(challenger["head_params"]),
-                "model_name": self.model_name,
-                "source": "eksplorasi",
-            },
-        )
-        torch.save(
-            {
-                "config": champion_config,
-                "run_id": None,
-                "val_f1_macro": val_f1,
-                "model_name": self.model_name,
-                "source": "eksplorasi",
-                "head_state": head_checkpoint["head_state"],
-                "head_config": head_checkpoint["config"],
-                "hidden_size": head_checkpoint["hidden_size"],
-            },
-            self.checkpoint_dir / "rmc_best.pt",
-        )
 
     def run_final(self) -> dict[str, pd.DataFrame]:
         """Evaluasi test dan benchmark inferensi ketiga skenario dalam satu sesi.
@@ -935,24 +745,39 @@ class CampaignRunner:
         eval_test: bool,
         batch_id: str,
     ) -> dict[str, object]:
+        if config.rmb_run_id is None:
+            raise FileNotFoundError(
+                "RM-c butuh head RM-b, tetapi juara RM-b belum ada; jalankan RM-b lebih dulu"
+            )
+
         features = self.features
-        head, head_config = self._load_best_head()
+        head_record = self._rmb_record(config.rmb_run_id)
+        head, head_config = self._head_from_checkpoint(
+            self._load_checkpoint(f"rmb_heads/run_{config.rmb_run_id}.pt")
+        )
         evaluator = RMCEvaluator(features, head, self.device)
 
         metrics, extras = evaluator.evaluate(config, split="val")
 
+        head_params = int(head_record["trainable_params"])
+        head_train_time_s = float(head_record["train_time_s"])
         row = {
             "scenario": "rmc",
             "batch_id": batch_id,
             "model_name": self.model_name,
             **config.model_dump(),
             "head_arch_rmb": head_config.get("head_arch"),
+            "hidden_dim_rmb": head_config.get("hidden_dim"),
+            "val_f1_rmb": round(float(head_record["val_f1_macro"]), METRIC_PRECISION),
             **self._metric_columns(metrics),
             "index_vectors": extras["index_vectors"],
             "eval_time_s": extras["eval_time_s"],
-            # RM-c tidak melatih apa pun: nol parameter, nol waktu latih.
+            # RM-c sendiri tidak melatih apa pun; biaya head yang dipakainya
+            # dicatat terpisah agar kriteria sukses menghitungnya.
             "trainable_params": 0,
             "train_time_s": 0.0,
+            "head_trainable_params": head_params,
+            "head_train_time_s": head_train_time_s,
             "catatan": note,
         }
 
@@ -969,26 +794,19 @@ class CampaignRunner:
 
         row = run_logger.log(row)
 
-        rmb_champion = self.best.get("rmb")
-        if self.best.get("rmc").get("source") == "eksplorasi":
-            # Putusan eksplorasi dibuat dengan aturan yang lebih ketat daripada
-            # F1-macro semata; run standar susulan tidak boleh menimpanya diam-diam.
-            promoted = False
-        else:
-            promoted = self.best.update(
-                "rmc",
-                {
-                    "run_id": run_id,
-                    "config": config.model_dump(),
-                    "val_f1_macro": metrics["f1_macro"],
-                    "train_time_s": 0.0,
-                    "trainable_params": 0,
-                    "head_train_time_s": rmb_champion.get("train_time_s"),
-                    "head_trainable_params": rmb_champion.get("trainable_params"),
-                    "model_name": self.model_name,
-                    "source": "standar",
-                },
-            )
+        promoted = self.best.update(
+            "rmc",
+            {
+                "run_id": run_id,
+                "config": config.model_dump(),
+                "val_f1_macro": metrics["f1_macro"],
+                "train_time_s": 0.0,
+                "trainable_params": 0,
+                "head_train_time_s": head_train_time_s,
+                "head_trainable_params": head_params,
+                "model_name": self.model_name,
+            },
+        )
         if promoted:
             torch.save(
                 {
@@ -996,12 +814,15 @@ class CampaignRunner:
                     "run_id": run_id,
                     "val_f1_macro": metrics["f1_macro"],
                     "model_name": self.model_name,
-                    "source": "standar",
+                    **self._head_payload(config.rmb_run_id),
                 },
                 self.checkpoint_dir / "rmc_best.pt",
             )
 
-        logger.info("[rmc] RUN #%d val F1-macro %.4f", run_id, metrics["f1_macro"])
+        logger.info(
+            "[rmc] RUN #%d head RM-b #%d val F1-macro %.4f",
+            run_id, config.rmb_run_id, metrics["f1_macro"],
+        )
         return row
 
     # ------------------------------------------------------------------
@@ -1207,6 +1028,28 @@ class CampaignRunner:
         rmb_champion = self.best.get("rmb")
         return rmb_champion.get("trainable_params"), rmb_champion.get("train_time_s")
 
+    def _resolve_rmc_head(self, config: RMCConfig) -> RMCConfig:
+        """Isi `rmb_run_id` kosong dengan juara RM-b; biarkan kosong bila belum ada."""
+        champion = self.best.get("rmb")
+        if config.rmb_run_id is not None or not champion:
+            return config
+        return config.model_copy(update={"rmb_run_id": int(champion["run_id"])})
+
+    def _rmb_record(self, rmb_run_id: int) -> dict[str, object]:
+        rmb_runs = read_csv(self.out_dir / "runs_rmb.csv")
+        matches = rmb_runs[rmb_runs["run_id"] == rmb_run_id] if not rmb_runs.empty else rmb_runs
+        if matches.empty:
+            raise ValueError(f"head RM-b run #{rmb_run_id} tidak ada di runs_rmb.csv")
+        return matches.iloc[0].to_dict()
+
+    def _head_payload(self, rmb_run_id: int) -> dict[str, object]:
+        checkpoint = self._load_checkpoint(f"rmb_heads/run_{rmb_run_id}.pt")
+        return {
+            "head_state": checkpoint["head_state"],
+            "head_config": checkpoint["config"],
+            "hidden_size": checkpoint["hidden_size"],
+        }
+
     def _rmb_checkpoint(
         self,
         run_id: int,
@@ -1313,8 +1156,8 @@ class CampaignRunner:
     def _load_rmc_predictor(self) -> tuple[torch.nn.Module, FusionFormulaConfig]:
         """Head dan rumus fusi juara RM-c.
 
-        Juara hasil eksplorasi membawa head-nya sendiri di `rmc_best.pt`. Juara
-        standar tidak, karena ia selalu memakai head juara RM-b dengan fusi linear.
+        `rmc_best.pt` membawa head yang dipakai juara. Checkpoint lama yang belum
+        memuatnya memakai head juara RM-b.
         """
         checkpoint = self._load_checkpoint("rmc_best.pt")
         config = dict(checkpoint["config"])
