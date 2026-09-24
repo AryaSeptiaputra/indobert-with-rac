@@ -149,6 +149,23 @@ class TestFinal:
         with pytest.raises(RuntimeError, match="belum punya run"):
             runner.run_final()
 
+    def test_dekomposisi_latency_ditulis_per_komponen(self, runner, tmp_path) -> None:
+        frame = runner._latency_breakdown(
+            (("RM-c", "encoder", lambda: None), ("RM-c", "retrieval dan fusi", lambda: None))
+        )
+        written = pd.read_csv(tmp_path / "metrics" / "latency_breakdown.csv")
+        assert written["component"].tolist() == ["encoder", "retrieval dan fusi"]
+        assert (frame["latency_ms"] >= 0).all()
+
+
+class TestMemoriPelatihanRMB:
+    def test_memori_pelatihan_mencakup_ekstraksi(self, runner, feature_set) -> None:
+        """Waktu latih RM-b mencakup ekstraksi, jadi memori puncaknya juga."""
+        feature_set.extract_peak_mem_mb = 850.0
+        row = runner.run("rmb", {"epochs": 1})
+        assert row["extract_peak_mem_mb"] == 850.0
+        assert row["train_peak_mem_mb"] == max(row["peak_mem_mb"], 850.0)
+
 
 class TestResume:
     """Batch yang terputus harus bisa dijalankan ulang tanpa mengulang pekerjaan."""

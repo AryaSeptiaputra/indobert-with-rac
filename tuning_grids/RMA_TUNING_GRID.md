@@ -1,11 +1,11 @@
 # RM-a — Rancangan Eksplorasi Hyperparameter (26 run)
 
-Dokumen kerja untuk tuning RM-a (full fine-tuning IndoBERT) lewat `04_tuning_campaign.ipynb`.
+Dokumen kerja untuk tuning RM-a (full fine-tuning IndoBERT) lewat `03a_rma_finetune.ipynb`.
 Isi kolom **Alasan** langsung dapat disalin ke field `catatan` di UI.
 
 > **`RMA_TUNING_GRID.csv`** (folder ini, `tuning_grids/`) adalah transkripsi mesin-terbaca dari ke-24 baris
 > Tahap 1 di bawah (kolom `lr,epochs,batch,warmup_ratio,weight_decay,micro_batch,catatan`).
-> Unggah langsung lewat `runner.run_batch()` di `04_tuning_campaign.ipynb` untuk menjalankan
+> Unggah langsung lewat `runner.run_batch()` di `03a_rma_finetune.ipynb` untuk menjalankan
 > seluruh Tahap 1 dalam satu panggilan.
 > Tabel markdown di bawah ini tetap jadi **sumber kebenaran**; jika tabel berubah, salin
 > ulang manual ke CSV. Tahap 2 (2 baris coordinate-descent) SENGAJA tidak ada di CSV karena

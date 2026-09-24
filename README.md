@@ -132,7 +132,7 @@ Seluruh pipeline dijalankan dari notebook, berurutan:
 
 ```
 01_eda → 02_preprocessing → 03a_rma → 03b_rmb → 03c_rmc
-       → 04_tuning_campaign → 05_final_benchmark → 06_analysis_export
+       → 05_final_benchmark → 06_analysis_export → 04_bab4_artifacts
    (03a-03c: kampanye RM-a → RM-b → RM-c seluruh head, satu mesin)
 ```
 
@@ -143,7 +143,7 @@ Seluruh pipeline dijalankan dari notebook, berurutan:
 | `03a_rma_finetune.ipynb` | Kampanye RM-a: kalibrasi biaya, grid `lr x epochs x batch`, coordinate descent `warmup_ratio`/`weight_decay` |
 | `03b_rmb_frozen.ipynb` | Kampanye RM-b: ekstraksi fitur beku dan seluruh grid head; setiap head disimpan |
 | `03c_rmc_rac.ipynb` | Kampanye RM-c (fusi linear): seluruh head RM-b x 66 `alpha x k`, lalu `weighting=uniform` di sel juara |
-| `04_tuning_campaign.ipynb` | Sedang dialihfungsikan menjadi pembangkit figur jurnal dan skripsi (isinya masih kampanye lama, tidak perlu dijalankan) |
+| `04_bab4_artifacts.ipynb` | Gambar 4.1-4.8 Bab 4 dari log kampanye; gambar test (4.5-4.8) muncul setelah 05 dijalankan |
 | `05_final_benchmark.ipynb` | Split test dan benchmark inferensi, satu sesi |
 | `06_analysis_export.ipynb` | Biaya FAISS, penggabungan riwayat, ekspor Excel |
 

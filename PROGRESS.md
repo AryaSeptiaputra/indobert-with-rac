@@ -28,7 +28,12 @@ dan lapis standar serta eksplorasi dilebur menjadi satu grid: seluruh head RM-b 
 `rmc_exploration.py` (putusan bootstrap standar-vs-eksplorasi),
 `RMC_EXPLORATION_GRID.*`, `RMC_TUNING_GRID_STAGE2.csv`, dan
 `BestTracker.replace` dihapus; kode Rumus 1-4 di `fusion_ablation.py` dibiarkan
-tetapi tidak dipakai. Test: 365 lulus. Output sel hasil kampanye lama di 04,
+tetapi tidak dipakai. Notebook 04 dialihfungsikan menjadi
+`04_bab4_artifacts.ipynb`: Gambar 4.1-4.8 dibangkitkan `ThesisFigureBuilder`
+dari log; `run_final` kini juga menulis `metrics/final_predictions.csv` (prediksi
+test per baris) dan `metrics/latency_breakdown.csv` (encoder, head, retrieval dan
+fusi), dan `runs_rmb.csv` mencatat `train_peak_mem_mb` (maks ekstraksi dan
+training head). Test: 376 lulus. Output sel hasil kampanye lama di 04,
 05, 06, dan 06_lite dikosongkan. `04_tuning_campaign.ipynb` akan dialihfungsikan
 menjadi notebook pembangkit figur untuk jurnal/skripsi (rancangan figur belum
 diputuskan; kontennya masih kampanye lama untuk sementara). Angka kampanye

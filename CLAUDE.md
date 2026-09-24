@@ -43,7 +43,7 @@ tidak ada UI.
 
 ```
 01_eda → 02_preprocessing → 03a_rma → 03b_rmb → 03c_rmc
-       → 04_tuning_campaign → 05_final_benchmark → 06_analysis_export
+       → 05_final_benchmark → 06_analysis_export → 04_bab4_artifacts
 ```
 
 Jangan lewati `02_preprocessing.ipynb`: notebook model bergantung padanya.
@@ -54,11 +54,12 @@ head RM-b x alpha x k). Ketiganya menulis ke `outputs/tuning/`, folder yang juga
 dibaca 05 dan 06. Tahap RM-b menyimpan state setiap head di
 `checkpoints/rmb_heads/`; RM-c memuat head itu, tidak melatih ulang.
 
-04 sedang dialihfungsikan menjadi notebook pembangkit figur untuk jurnal dan
-skripsi; isinya saat ini masih kampanye lama dan tidak perlu dijalankan.
+`04_bab4_artifacts.ipynb` membangkitkan Gambar 4.1-4.8 dari log kampanye
+(`src/services/thesis_figures.py`, keluaran `figures/bab4/`). Gambar 4.1-4.4
+cukup butuh 03a-03c; gambar 4.5-4.8 butuh 05, jadi jalankan 04 lagi setelah 05.
 
 ```bash
-pytest        # 365 test, tanpa GPU
+pytest        # 376 test, tanpa GPU
 ```
 
 ## Arsitektur
@@ -94,6 +95,7 @@ data/raw/data_labeling.csv
 | `src/services/campaign.py` | `CampaignRunner` — orkestrasi run, batch, benchmark final |
 | `src/services/run_log.py` | `RunLogger`, `HistoryWriter`, `BestTracker` |
 | `src/services/reporting.py` | `FigureReporter` |
+| `src/services/thesis_figures.py` | `ThesisFigureBuilder`: Gambar 4.1-4.8 Bab 4 (PNG 300 dpi + PDF) langsung dari log |
 | `src/services/faiss_benchmark.py` | `FaissBenchmark` |
 | `src/services/aggregation.py` | `RunMerger` |
 | `src/services/workbook.py` | `WorkbookBuilder` |

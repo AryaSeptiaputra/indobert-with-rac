@@ -25,6 +25,7 @@ import subprocess
 import time
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import torch
 from pydantic import ValidationError
@@ -687,6 +688,10 @@ class CampaignRunner:
             "train_time_s": round(result.train_time_s + features.extract_time_s, 2),
             "trainable_params": result.trainable_params,
             "peak_mem_mb": result.peak_mem_mb,
+            "extract_peak_mem_mb": features.extract_peak_mem_mb,
+            # Pasangan waktu latih yang mencakup ekstraksi: memori puncak fase
+            # pelatihan adalah yang terbesar dari ekstraksi dan training head.
+            "train_peak_mem_mb": max(result.peak_mem_mb, features.extract_peak_mem_mb),
             "infer_latency_ms": result.extras["infer_latency_ms"],
             "catatan": note,
         }
@@ -855,6 +860,19 @@ class CampaignRunner:
         metrics_c, extras_c = comparator.evaluate(rmc_config, split="test")
         self._plot_final("rmc", test_labels, extras_c["preds"], extras_c["p_judi"])
 
+        if not np.array_equal(np.asarray(truths), test_labels):
+            raise RuntimeError("urutan split test RM-a berbeda dengan fitur beku RM-b/RM-c")
+        write_csv(
+            self.out_dir / "metrics" / "final_predictions.csv",
+            pd.DataFrame(
+                {
+                    "label": test_labels,
+                    "pred_rma": np.asarray(predictions),
+                    "pred_rmb": p_bert.argmax(1),
+                    "pred_rmc": extras_c["preds"],
+                }
+            ),
+        )
         return {"rma": metrics_a, "rmb": metrics_b, "rmc": metrics_c}
 
     def _inference_benchmark(
@@ -904,6 +922,50 @@ class CampaignRunner:
             similarities, indices = classifier.retrieve(query)
             return comparator.fuse(rmc_config, logits, similarities, train_labels[indices])[0]
 
+        with torch.no_grad(), torch.amp.autocast("cuda", enabled=use_amp):
+            rma_pooled = model.base_model(**inputs).pooler_output
+            frozen_pooled = mean_pool(
+                encoder(**inputs).last_hidden_state, inputs["attention_mask"]
+            ).float()
+            rmc_logits = rmc_head(frozen_pooled).cpu().numpy()
+
+        def rma_encoder():
+            with torch.no_grad(), torch.amp.autocast("cuda", enabled=use_amp):
+                return model.base_model(**inputs).pooler_output
+
+        def rma_head():
+            with torch.no_grad(), torch.amp.autocast("cuda", enabled=use_amp):
+                return model.classifier(model.dropout(rma_pooled))
+
+        def frozen_encoder():
+            with torch.no_grad(), torch.amp.autocast("cuda", enabled=use_amp):
+                output = encoder(**inputs)
+                return mean_pool(output.last_hidden_state, inputs["attention_mask"])
+
+        def rmb_head():
+            with torch.no_grad():
+                return head(frozen_pooled)
+
+        def rmc_head_only():
+            with torch.no_grad():
+                return rmc_head(frozen_pooled).cpu().numpy()
+
+        def retrieval_and_fusion():
+            similarities, indices = classifier.retrieve(query)
+            return comparator.fuse(rmc_config, rmc_logits, similarities, train_labels[indices])[0]
+
+        self._latency_breakdown(
+            (
+                ("RM-a", "encoder", rma_encoder),
+                ("RM-a", "classification head", rma_head),
+                ("RM-b", "encoder", frozen_encoder),
+                ("RM-b", "classification head", rmb_head),
+                ("RM-c", "encoder", frozen_encoder),
+                ("RM-c", "classification head", rmc_head_only),
+                ("RM-c", "retrieval dan fusi", retrieval_and_fusion),
+            )
+        )
+
         rows = []
         for scenario, predict in (
             ("RM-a", infer_rma),
@@ -928,6 +990,27 @@ class CampaignRunner:
 
         frame = pd.DataFrame(rows)
         write_csv(self.out_dir / "metrics" / "inference_benchmark.csv", frame)
+        return frame
+
+    def _latency_breakdown(self, components) -> pd.DataFrame:
+        """Latency tiap komponen inferensi, diukur terpisah satu per satu.
+
+        Jumlah komponen mendekati latency ujung ke ujung tetapi tidak persis sama,
+        karena tiap pengukuran punya overhead pemanggilan dan sinkronisasinya sendiri.
+        """
+        rows = []
+        for scenario, component, predict in components:
+            if self.device.type == "cuda":
+                torch.cuda.empty_cache()
+            rows.append(
+                {
+                    "scenario": scenario,
+                    "component": component,
+                    "latency_ms": round(self.profiler.measure_latency(predict), 4),
+                }
+            )
+        frame = pd.DataFrame(rows)
+        write_csv(self.out_dir / "metrics" / "latency_breakdown.csv", frame)
         return frame
 
     def _comparison_table(

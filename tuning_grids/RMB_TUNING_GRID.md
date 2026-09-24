@@ -1,11 +1,11 @@
 # RM-b — Rancangan Eksplorasi Hyperparameter (27 run: 4 Tahap 1 + 2 perluasan + 15 Tahap 2 + 6 Tahap 3)
 
-Dokumen kerja untuk tuning RM-b (frozen encoder + head) lewat `04_tuning_campaign.ipynb`.
+Dokumen kerja untuk tuning RM-b (frozen encoder + head) lewat `03b_rmb_frozen.ipynb`.
 Isi kolom **Alasan** langsung dapat disalin ke field `catatan` di UI. Pola dokumen ini
 sengaja disamakan dengan `RMA_TUNING_GRID.md` supaya rigor-nya setara.
 
 > **CSV yang tersedia** (semua siap diunggah lewat mode **Batch → Tempel/unggah tabel
-> CSV** di `04_tuning_campaign.ipynb`, kolom: `head_arch,hidden_dim,epochs,lr,dropout,
+> CSV** di `03b_rmb_frozen.ipynb`, kolom: `head_arch,hidden_dim,epochs,lr,dropout,
 > weight_decay,batch,catatan`):
 > - `RMB_TUNING_GRID.csv` — 4 baris Tahap 1 (tak bergantung hasil apa pun).
 > - `RMB_TUNING_GRID_STAGE1B.csv` — 2 baris perluasan Tahap 1 (`hidden_dim` 768/1024),
