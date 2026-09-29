@@ -45,12 +45,11 @@ data/processed/*
 
 # ---------------------------------------------------------------------------
 # Keluaran eksperimen
-# Hasil run TIDAK disimpan di git. Berkas seperti runs_*.csv, best.json, dan
-# history/ dibaca ulang oleh CampaignRunner: run_batch melewati konfigurasi yang
-# sudah tercatat (resume) dan BestTracker hanya mempromosikan F1 yang lebih tinggi
-# dari juara tercatat. Hasil lama yang ikut ter-clone membuat kampanye baru di
-# instance lain berjalan tanpa menghasilkan apa pun dan tanpa checkpoint juara.
-# Simpan hasil dari mesin tempat kampanye berjalan (mis. HASIL.xlsx), bukan lewat git.
+# Hasil run TIDAK disimpan di git. runs_*.csv menumpuk dan penomoran run
+# berlanjut dari isinya, dan best.json hanya mempromosikan F1 yang lebih tinggi
+# dari juara tercatat; hasil lama yang ikut ter-clone mencampur kampanye baru
+# dengan yang lama. Simpan hasil dari mesin tempat kampanye berjalan lewat arsip
+# 07_archive.ipynb, bukan lewat git.
 #
 # Yang tetap ter-track: figur EDA (keluaran 01_eda, bukan hasil kampanye) dan README.
 # ---------------------------------------------------------------------------

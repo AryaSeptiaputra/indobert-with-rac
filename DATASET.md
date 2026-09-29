@@ -14,7 +14,7 @@ Deteksi komentar promosi judi daring berbahasa Indonesia di YouTube (klasifikasi
 
 ## Pipeline Preprocessing
 
-Dieksekusi oleh `notebooks/02_preprocessing.ipynb` (fungsi di `src/services/preprocessing.py`).
+Dieksekusi oleh `notebooks/02_preprocessing.ipynb` (seluruh fungsinya hidup di notebook itu).
 
 ```
 load raw (textOriginal, label)
@@ -91,7 +91,7 @@ Skema kolom split: `textOriginal` (mentah, untuk traceability), `text_clean` (in
 
 ## Tokenisasi (untuk fase modeling)
 
-Dikunci di `src/models/comment_dataset.py`:
+Dikunci di `load_tokenizer` (sel konstanta `MODEL_NAME`, `MAX_LENGTH`, `SPECIAL_TOKENS` di 02, 03a, 03b, 05):
 
 - Base tokenizer: **`indobenchmark/indobert-base-p2`** (`do_lower_case=True`).
 - **max_length = 128** (P99 panjang token `text_clean` = 58; hanya 0,08% > 128).
@@ -104,7 +104,7 @@ Dikunci di `src/models/comment_dataset.py`:
 
 - Seed **42** di seluruh langkah (dedup deterministik, split stratified).
 - Jalankan ulang: `notebooks/02_preprocessing.ipynb` (butuh `data/raw/data_labeling.csv`).
-- Modul: `src/services/preprocessing.py` (pure pandas/sklearn), `src/models/comment_dataset.py` (torch/transformers).
+- Kode: `notebooks/02_preprocessing.ipynb` (pandas/sklearn; tokenizer hanya untuk statistik [UNK]).
 
 ## Catatan untuk RM-c (RAC)
 
@@ -120,7 +120,7 @@ Fusi probabilitas: `p_final = (1-α)·softmax(head) + α·p_retr`; retrieval = c
 | **k (neighbors)** | **5** | sama seperti default awal |
 | weighting | `similarity` | vs `uniform` (dicek terpisah, similarity menang) |
 
-Ditentukan lewat kampanye tuning di Vast.ai (arsip) (67 run total: 66 grid α×k + 1 cek weighting), val F1-macro 0.9699. Modul: `src/services/rac.py`. Angka lama di bawah (α=0.5, k=3, dari `notebooks/03c_rmc_rac.ipynb`/Colab) adalah **baseline historis pra-tuning** — dipertahankan untuk narasi metodologi, bukan angka final.
+Ditentukan lewat kampanye tuning di Vast.ai (arsip) (67 run total: 66 grid α×k + 1 cek weighting), val F1-macro 0.9699. Kode: `notebooks/03c_rmc_rac.ipynb`. Angka lama di bawah (α=0.5, k=3, dari `notebooks/03c_rmc_rac.ipynb`/Colab) adalah **baseline historis pra-tuning** — dipertahankan untuk narasi metodologi, bukan angka final.
 
 ### Ringkasan hasil ketiga skenario — angka final (test set: 1.149 non-judi / 256 judi, satu sesi RTX 3090, 2026-07-25)
 

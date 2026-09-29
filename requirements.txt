@@ -1,4 +1,4 @@
-# IndoBERT-with-RAC - dependensi produksi
+# IndoBERT-with-RAC - dependensi notebook
 # Instalasi: pip install -r requirements.txt
 #
 # Torch di-pin tanpa suffix build. Untuk GPU, pasang lebih dulu dari index CUDA
@@ -8,23 +8,14 @@
 
 torch==2.12.1
 transformers==5.12.1
-sentencepiece==0.2.2       # dibutuhkan transformers untuk mengenali kelas AlbertTokenizer
-                           # sebelum fallback WordPiece berjalan (lihat comment_dataset.py)
 
 faiss-cpu==1.14.3          # retrieval RM-c; indeks flat/exact, CPU sudah memadai
 scikit-learn==1.8.0
 pandas==2.3.3
 numpy==2.4.0
 
-pydantic==2.13.5
-pydantic-settings==2.15.0
-python-json-logger==4.2.0
-
 matplotlib==3.10.8
 seaborn==0.13.2
-openpyxl==3.1.5
+openpyxl==3.1.5            # data_tabel.xlsx di 06_artifacts
 tqdm==4.68.3
-psutil==7.2.2              # pengukuran memori proses pada benchmark FAISS
-langdetect==1.0.9          # deteksi bahasa (EDA)
-
-streamlit==1.59.2          # control panel app.py
+psutil==7.2.2              # waktu boot sesi (hardware.json) dan memori proses benchmark FAISS

@@ -3,12 +3,12 @@
 Dokumen kerja untuk tuning RM-c (RAC — Retrieval-Augmented Classification) lewat
 `03c_rmc_rac.ipynb`. Pola sama dengan `RMA_TUNING_GRID.md`/`RMB_TUNING_GRID.md`,
 disesuaikan karena RM-c **tidak melatih apa pun** — hanya fusi probabilitas sebuah head
-RM-b dengan distribusi hasil retrieval FAISS (`RMCEvaluator` di `src/services/training.py`;
+RM-b dengan distribusi hasil retrieval FAISS (`evaluate_rac` di `03c_rmc_rac.ipynb`;
 index dibangun HANYA dari embedding train — anti-leakage, lihat `DATASET.md`).
 
 > **Satu grid, satu rumus (2026-09-24).** Sumbu head digrid bersama `alpha × k`: setiap
 > head yang tercatat di `runs_rmb.csv` (state-nya di `checkpoints/rmb_heads/`) dipasangkan
-> dengan 66 konfigurasi di `RMC_TUNING_GRID.csv`, lewat `rmb_run_id` di `RMCConfig`.
+> dengan 66 konfigurasi di `RMC_TUNING_GRID.csv`, lewat `rmb_run_id` di konfigurasi RM-c.
 > Rumus fusi hanya fusi linear di bawah. Pemisahan lama "RM-c standar" (head juara RM-b
 > saja) dan "eksplorasi" (seluruh head, lima rumus, putusan bootstrap) sudah dilebur.
 >
@@ -24,10 +24,10 @@ index dibangun HANYA dari embedding train — anti-leakage, lihat `DATASET.md`).
 ```python
 p_final = (1 - alpha) * softmax(head(embedding)) + alpha * p_retrieval
 ```
-(`rac.fuse`, `src/services/rac.py:96-98`) — `alpha=0` murni head RM-b, `alpha=1` murni retrieval
+(`predict_rac`, `03c_rmc_rac.ipynb`) — `alpha=0` murni head RM-b, `alpha=1` murni retrieval
 k-NN. `p_retrieval` dihitung dari `k` tetangga terdekat (cosine similarity, index FAISS
 train-only) dengan bobot `similarity` (mirip cosine, default) atau `uniform` (voting rata,
-`src/services/rac.py:59-74`).
+`to_retrieval_distribution`).
 
 **Karena tanpa training, RM-c jauh lebih murah bahkan dari RM-b** (hitungan
 milidetik–detik/eval, tanpa forward pass BERT — cuma index search + aritmetika fusi) —
@@ -56,12 +56,12 @@ apa pun `weighting`-nya) — jadi diuji terpisah di sel pemenang, bukan digrid b
   sudah dihapus, tak diasumsikan berulang**, sama prinsipnya dengan keputusan arsitektur
   RM-b).
 
-11 × 6 = **66 kombinasi**. `weighting="similarity"` (default `RMC_DEFAULT`, `src/services/training.py:43`)
+11 × 6 = **66 kombinasi**. `weighting="similarity"` (default RM-c)
 dikunci di seluruh sel — mendasarkan bobot tetangga pada cosine similarity, bukan voting
-rata, sesuai desain default `rac.py`.
+rata, sesuai desain default RAC di 03c.
 
 **Landasan:** Yu dkk. (2023) *"Retrieval-augmented few-shot text classification"*
-(dikutip `src/services/training.py:42`) dan Long dkk. (2022) *"Retrieval augmented classification
+dan Long dkk. (2022) *"Retrieval augmented classification
 for long-tail visual recognition"* — keduanya menunjukkan performa RAC sensitif terhadap
 bobot fusi dan jumlah tetangga, memotivasi grid dua-sumbu ini alih-alih menerka satu nilai.
 Chalkidis & Kementchedjhieva (2023) *"Retrieval-augmented multi-label text classification"*
@@ -95,8 +95,8 @@ jadi diuji sekali di sel juara Tahap 1 (head, `alpha`, dan `k` yang sama), bukan
 3. **Baca `alpha=0` sebagai baseline wajib** — kalau tak ada `alpha>0` yang mengalahkannya
    secara berarti, itu temuan valid (RAC tak membantu untuk kombinasi head/data ini),
    bukan kegagalan eksperimen.
-4. **Baca grid sebagai permukaan**: pivot `alpha × k` (`reporting.AXES["rmc"] =
-   ("alpha","k","weighting")` sudah otomatis membuat heatmap-nya) — cari apakah k optimal
+4. **Baca grid sebagai permukaan**: pivot `alpha × k` per head (Gambar 4.3 di 06 untuk
+   head juara) — cari apakah k optimal
    bergeser seiring alpha berubah.
 5. **TEST tidak disentuh** sampai tab Final.
 

@@ -33,12 +33,9 @@ python -m venv .venv
 # source .venv/bin/activate       # Linux / macOS
 
 pip install -r requirements-dev.txt
-pip install -e .
-cp .env.example .env
 ```
 
-`pip install -e .` mendaftarkan paket `src` sehingga `from src... import ...`
-berfungsi dari notebook mana pun tanpa memanipulasi `sys.path`.
+Tidak ada paket Python yang dipasang: seluruh kode hidup di notebook masing-masing.
 
 Untuk GPU, pasang torch dari index CUDA yang sesuai lebih dulu:
 
@@ -52,39 +49,24 @@ pip install torch==2.12.1 --index-url https://download.pytorch.org/whl/cu130
 
 ```
 IndoBERT-with-RAC/
-├── src/
-│   ├── config.py              # Settings (pydantic-settings), seluruh path & default
-│   ├── models/
-│   │   ├── schemas.py         # RMAConfig / RMBConfig / RMCConfig / RunRequest
-│   │   ├── comment_dataset.py # Tokenizer + PyTorch Dataset
-│   │   └── heads.py           # Factory encoder dan classification head
-│   ├── services/
-│   │   ├── preprocessing.py   # TextCleaner, DatasetBuilder, statistik NFKC dan guard
-│   │   ├── data.py            # ExperimentData (split + tokenizer + class weight)
-│   │   ├── features.py        # FeatureExtractor, cache embedding beku
-│   │   ├── training.py        # RMATrainer, RMBTrainer, RMCEvaluator
-│   │   ├── rac.py             # RACClassifier, NeighborCache, FaissBenchmark (FAISS + fusi probabilitas)
-│   │   ├── fusion_ablation.py # Evaluator fusi RAC (kampanye hanya memakai linear)
-│   │   ├── evaluation.py      # ClassificationEvaluator, EfficiencyProfiler, gate satu-hardware
-│   │   ├── campaign.py        # CampaignRunner (orkestrasi run dan benchmark)
-│   │   ├── run_log.py         # RunLogger, HistoryWriter, BestTracker
-│   │   ├── selection.py       # Peringkat run, kandidat #1/#2 berhash, ringkasan RAC per head
-│   │   ├── reporting.py       # FigureReporter (gambar diagnostik per run)
-│   │   ├── figures.py         # FigureBuilder: Gambar 4.1-4.8
-│   │   ├── tables.py          # TableDataExporter: data mentah Tabel 4.1-4.19 dan L.1
-│   │   └── export.py          # WorkbookBuilder, RunMerger, ResultArchiver (.tar.gz)
-│   └── utils/                 # logger, seeding, I/O atomik
-├── tests/                     # pytest, mirror struktur src/
-├── notebooks/                 # ENTRY POINT seluruh pipeline
+├── notebooks/                 # seluruh kode pipeline; tiap fungsi hidup di notebook yang memakainya
 ├── data/
 │   ├── raw/                   # data_labeling.csv (jangan diubah)
 │   ├── interim/               # data_clean.csv
 │   └── processed/             # train/val/test.csv + metadata.json
-├── models/                    # checkpoint final hasil ekspor
+├── models/                    # checkpoint final hasil ekspor 05
 ├── outputs/                   # keluaran eksperimen
 ├── tuning_grids/              # rancangan grid per skenario (input kampanye)
 └── docs/                      # laporan EDA, referensi, arsip
 ```
+
+Gaya kode mengikuti repo `indonesian-rag-retrieval-benchmark`: sel kode pertama tiap
+notebook berisi seluruh konstanta (path relatif `../`, nama model, seed, ambang), lalu
+setiap fungsi ditulis di sel yang memakainya dan langsung dipanggil di bawahnya. Tidak
+ada `src/`, tidak ada import antar-notebook. Fungsi yang dibutuhkan beberapa notebook
+(misalnya `load_tokenizer`, `build_head`, `compute_metrics`, fungsi RAC) sengaja
+disalin ke tiap notebook; bila salah satunya diubah, salinan di notebook lain ikut
+diubah. Notebook saling terhubung hanya lewat berkas di `data/` dan `outputs/`.
 
 ---
 
@@ -108,16 +90,14 @@ cd indobert-with-rac
 git checkout vast.ai
 ```
 
-Checkpoint (`outputs/**/checkpoints/`) tidak ikut git, jadi di clone baru harus
-dipulihkan dengan `runner.restore_checkpoints()`; sel untuk itu sudah ada di
-`03c_rmc_rac.ipynb`. Menjalankan ulang 03b
-TIDAK membuat checkpoint juara kembali.
+Checkpoint (`outputs/**/checkpoints/`) tidak ikut git dan tidak bisa dipulihkan
+tanpa mengulang tuning, jadi 03a sampai 05 dijalankan di mesin yang sama.
 
-Codebase (`src/`, `notebooks/`, `tests/`) identik di ketiga branch — yang
-berbeda hanya narasi `PROGRESS.md`. Hasil run (`outputs/`) TIDAK disimpan di git:
-`runs_*.csv` dan `best.json` yang ikut ter-clone membuat kampanye baru melewati
-semua konfigurasi dan tidak menghasilkan checkpoint juara. Simpan hasil dari mesin
-tempat kampanye berjalan sebelum instance dihapus: jalankan sel "Arsipkan hasil" di
+Codebase (`notebooks/`) identik di ketiga branch — yang berbeda hanya narasi
+`PROGRESS.md`. Hasil run (`outputs/`) TIDAK disimpan di git: `runs_*.csv` menumpuk
+dan `best.json` hanya mempromosikan F1 yang lebih tinggi, sehingga hasil lama yang
+ikut ter-clone tercampur dengan kampanye baru. Simpan hasil dari mesin tempat
+kampanye berjalan sebelum instance dihapus: jalankan sel "Arsipkan hasil" di
 `07_archive.ipynb`, lalu unduh `hasil_*.tar.gz` yang dihasilkannya.
 Jangan gabungkan angka
 efisiensi (waktu latih, latency, peak memory) dari `local` dan `vast.ai` dalam
@@ -145,7 +125,7 @@ Seluruh pipeline dijalankan dari notebook, berurutan:
 | `03c_rmc_rac.ipynb` | Kampanye RM-c (fusi linear): seluruh head RM-b x 66 `alpha x k`, putusan juara (default head RM-b resmi vs penantang, bootstrap), `weighting=uniform` di sel juara, penetapan kandidat #2 |
 | `05_final_benchmark.ipynb` | Gate lingkungan, split test, kandidat #2, benchmark inferensi per komponen, satu sesi |
 | `06_artifacts.ipynb` | Gambar 4.1-4.8 dan data mentah Tabel 4.1-4.19 + L.1 (`data_tabel.xlsx`) dari log |
-| `07_archive.ipynb` | Biaya FAISS lintas k, penggabungan riwayat, ekspor `HASIL.xlsx`, arsip hasil |
+| `07_archive.ipynb` | Biaya FAISS lintas k, arsip hasil `hasil_*.tar.gz` |
 
 Jangan lewati `02_preprocessing.ipynb`: seluruh notebook model bergantung pada
 keluarannya.
@@ -156,17 +136,15 @@ adalah 03a-03c (tuning) lalu 05 (benchmark final). Tahap RM-b di 03b menyimpan
 state SETIAP head di `checkpoints/rmb_heads/`, karena RM-c di 03c menguji RAC
 di atas seluruh head itu.
 
-Menjalankan test:
-
-```bash
-pytest
-```
+Tidak ada resume otomatis. Bila kampanye terputus, lanjutkan dengan memotong daftar
+konfigurasi grid (misalnya `grid_stage1[n:]`) sesuai baris yang sudah tercatat di
+`runs_*.csv`.
 
 ---
 
 ## Hyperparameter
 
-Nilai awal (`src/models/schemas.py`) adalah titik masuk tuning, bukan nilai final.
+Nilai awal (`DEFAULT_CONFIG` di sel konstanta 03a dan 03b) adalah titik masuk tuning, bukan nilai final.
 
 | Parameter | RM-a | RM-b | RM-c |
 |-----------|------|------|------|
@@ -203,9 +181,9 @@ meratakan selisih dan bisa mengubah argmax pada kasus nyaris seri. Fusi level
 probabilitas dan level logit tidak ekuivalen.
 
 Itu fusi linear-konveks, satu-satunya rumus RM-c. Tuning RM-c di 03c menyapu
-head RM-b, alpha, dan k.
-Empat rumus alternatif di `fusion_ablation.py` (fusi level skor, alpha adaptif,
-geometric pooling) tidak lagi dipakai kampanye.
+head RM-b, alpha, dan k. Empat rumus alternatif (fusi level skor, alpha adaptif,
+geometric pooling) sempat diuji lalu dikeluarkan dari kampanye dan kodenya sudah
+dihapus.
 
 ---
 
@@ -238,9 +216,13 @@ dibandingkan lintas mesin.
 
 ## Catatan penyimpangan dari standar `writer-code`
 
-- **Tidak ada folder `scripts/`.** Seluruh pipeline dipanggil dari notebook,
-  sehingga notebook berperan sebagai entry point.
-- **Tidak ada layer API.** Proyek ini penelitian, bukan aplikasi berbackend.
+- **Kode hidup di notebook, bukan di `app/` atau `src/`.** `writer-code` §2.11
+  meminta notebook meng-import dari package; repo ini sengaja mengikuti gaya
+  `indonesian-rag-retrieval-benchmark` supaya setiap tahap terbaca utuh di satu
+  notebook. Konsekuensinya: tidak ada `tests/`, fungsi bersama disalin, dan
+  konfigurasi berupa konstanta di sel pertama, bukan `Settings`/`.env`.
+- **Tidak ada folder `scripts/` dan layer API.** Proyek ini penelitian, bukan
+  aplikasi berbackend.
 
 ---
 

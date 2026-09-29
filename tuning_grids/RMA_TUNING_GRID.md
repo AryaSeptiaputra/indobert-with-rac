@@ -5,8 +5,8 @@ Isi kolom **Alasan** langsung dapat disalin ke field `catatan` di UI.
 
 > **`RMA_TUNING_GRID.csv`** (folder ini, `tuning_grids/`) adalah transkripsi mesin-terbaca dari ke-24 baris
 > Tahap 1 di bawah (kolom `lr,epochs,batch,warmup_ratio,weight_decay,micro_batch,catatan`).
-> Unggah langsung lewat `runner.run_batch()` di `03a_rma_finetune.ipynb` untuk menjalankan
-> seluruh Tahap 1 dalam satu panggilan.
+> Dimuat `load_grid()` di `03a_rma_finetune.ipynb` lalu dijalankan `run_grid()` untuk
+> seluruh Tahap 1.
 > Tabel markdown di bawah ini tetap jadi **sumber kebenaran**; jika tabel berubah, salin
 > ulang manual ke CSV. Tahap 2 (2 baris coordinate-descent) SENGAJA tidak ada di CSV karena
 > bergantung pada sel pemenang Tahap 1 — isi manual lewat tombol "Isi dari config terbaik
@@ -16,7 +16,7 @@ Isi kolom **Alasan** langsung dapat disalin ke field `catatan` di UI.
 
 ## Metode: hibrida (grid + coordinate descent)
 
-Partisi axis diturunkan dari mekanisme nyata di `src/services/training.py:108-114`, bukan asumsi:
+Partisi axis diturunkan dari mekanisme nyata di `train_rma` (`03a_rma_finetune.ipynb`), bukan asumsi:
 
 ```python
 steps = ceil(len(tr)/accum) * epochs          # = ceil(N/batch) × epochs

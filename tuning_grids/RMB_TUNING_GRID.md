@@ -19,8 +19,8 @@ sengaja disamakan dengan `RMA_TUNING_GRID.md` supaya rigor-nya setara.
 
 ## Metode: 3 tahap mengikuti struktur ketergantungan field
 
-RM-b jauh lebih murah dari RM-a — melatih head di atas fitur beku (`train_eval_rmb`,
-`src/services/training.py:179-217`), hitungan **detik**/run, bukan menit. Tapi murahnya komputasi
+RM-b jauh lebih murah dari RM-a — melatih head di atas fitur beku (`train_rmb`,
+`03b_rmb_frozen.ipynb`), hitungan **detik**/run, bukan menit. Tapi murahnya komputasi
 **tidak** menghapus risiko *overfitting ke validation set* (~1.402 sampel) — makin banyak
 konfigurasi dibandingkan, makin besar peluang pemenang menang karena kebetulan, persis
 alasan `RMA_TUNING_GRID.md` menolak grid 5-sumbu penuh untuk RM-a. Jadi kampanye ini
@@ -28,12 +28,12 @@ alasan `RMA_TUNING_GRID.md` menolak grid 5-sumbu penuh untuk RM-a. Jadi kampanye
 
 Partisi tahap ikuti struktur ketergantungan nyata di kode, bukan asumsi:
 
-- **`head_arch` × `hidden_dim` terkopel struktural** (`build_head`, `src/models/heads.py:157-165`):
+- **`head_arch` × `hidden_dim` terkopel struktural** (`build_head`, `03b_rmb_frozen.ipynb`):
   `hidden_dim` cuma dipakai `MLPHead`; `FrozenHead` (linear) tak punya parameter itu sama
   sekali. Tak masuk akal digrid bersama field lain sebelum arsitektur diputuskan.
 - **`lr` × `epochs` terkopel kuat dengan arsitektur** — Peters, Ruder, & Smith (2019)
   *"To tune or not to tune? Adapting pretrained representations to diverse tasks"*
-  (dikutip di `src/services/training.py:39`): pada rezim *feature-based* (encoder beku), head yang
+  (dikutip di `DEFAULT_CONFIG` 03b): pada rezim *feature-based* (encoder beku), head yang
   diinisialisasi acak butuh **lr lebih tinggi** dan **epoch lebih banyak** dibanding
   fine-tuning penuh — sebab itu `RMB_DEFAULT` lr-nya 2e-4 (10× lipat RM-a) dan rentang
   epoch di sini diuji jauh lebih lebar (5–30) dari RM-a (3–8).
@@ -51,7 +51,7 @@ Tahap 1–2; Tahap 3 menguji batch 16/64 sebagai salah satu knop independen).
 ## Tahap 1 — Keputusan arsitektur head (4 run, TANPA ketergantungan hasil)
 
 **Dikunci untuk semua sel:** `epochs=5, lr=2e-4, dropout=0.1, weight_decay=0.01, batch=32`
-(= `RMB_DEFAULT` penuh, `src/services/training.py:40-41`) — hanya `head_arch`/`hidden_dim` divariasi.
+(= `DEFAULT_CONFIG` 03b penuh) — hanya `head_arch`/`hidden_dim` divariasi.
 
 Motivasi: sesi tuning lama (sebelum clean-slate, hasilnya sudah dihapus — dicatat di
 `PROGRESS.md`) menemukan "ganti head linear → MLP = lompatan terbesar (val 0,938→0,956)".
@@ -121,9 +121,8 @@ Rentang jauh lebih tinggi & lebar dari RM-a sesuai Peters+2019 di atas:
 
 **Baca sebagai permukaan:** susun pivot `lr × epochs` (satu tabel, karena `hidden_dim`
 sudah dikunci 1024 tahap ini) — apakah lr optimal bergeser saat anggaran epoch bertambah,
-atau stabil di satu nilai sepanjang rentang epoch? `reporting.AXES["rmb"] =
-("lr", "epochs", "hidden_dim")` sudah otomatis membuat heatmap ini begitu `runs_rmb.csv`
-punya ≥2 nilai unik di `lr` dan `epochs` — tak perlu langkah manual. Perhatikan khusus
+atau stabil di satu nilai sepanjang rentang epoch? Buat dari `runs_rmb.csv` dengan
+`pivot_table(index="lr", columns="epochs", values="val_f1_macro")`. Perhatikan khusus
 kolom `overfit_signal` di grid ini — head 1024 sudah terbukti rentan overfit di epoch 5;
 kemungkinan besar makin banyak run di sini akan menunjukkan `overfit_signal=True`, yang
 justru jadi bahan utama keputusan Tahap 3 (dropout/weight_decay lebih kuat).
@@ -150,7 +149,7 @@ knop **independen** (2 varian non-default per knop, field lain tetap di nilai pe
 |---|---|---|---|
 | 26 | dropout | **0,0** (vs default 0,1) | Devlin dkk. (2019) pakai dropout 0,1 sbg standar BERT — uji apakah head sekecil ini justru dirugikan oleh regularisasi tsb |
 | 27 | dropout | **0,3** (vs default 0,1) | Regularisasi lebih kuat — dicek meski sel pemenang plateau, bukan menurun, jadi ekspektasi realistis: perbaikan tipis atau tak ada |
-| 28 | weight_decay | **0,0** (vs default 0,01) | AdamW *decoupled weight decay* (Loshchilov & Hutter, dikutip `src/services/training.py:36`) — cek apakah regularisasi ini bahkan berpengaruh pada head sekecil ini |
+| 28 | weight_decay | **0,0** (vs default 0,01) | AdamW *decoupled weight decay* (Loshchilov & Hutter) — cek apakah regularisasi ini bahkan berpengaruh pada head sekecil ini |
 | 29 | weight_decay | **0,1** (vs default 0,01) | Regularisasi 10× lebih kuat — sama semangatnya dengan Tahap 2 RM-a |
 | 30 | batch | **16** (vs default 32) | RM-a membuktikan batch=32 unggul dari 16 (lebih cepat & F1 setara/lebih baik) — dicek ulang di RM-b karena training di atas fitur beku (tanpa grad-accum) punya dinamika update berbeda |
 | 31 | batch | **64** (vs default 32) | Batch lebih besar lagi — apakah tren "batch besar menang" dari RM-a berlanjut, atau ada titik baliknya? |
@@ -177,11 +176,11 @@ Isi dari kolom **Alasan** di tabel masing-masing tahap. Contoh:
 ## Aturan seleksi (identik RM-a — sudah terimplementasi di kode, tak perlu langkah manual)
 
 1. **Metrik utama** `val_f1_macro`; **tie-break** `val_f1_judi` (F1 kelas-1/judi).
-2. **Ambang seri ≤0,15pp** (`TIE_THRESHOLD_PP`, `src/services/training.py:46`, kolom
+2. **Ambang seri ≤0,15pp** (`TIE_THRESHOLD_PP` di sel konstanta 03b, kolom
    `is_tie_with_best` otomatis terisi di `runs_rmb.csv`) → pilih konfigurasi lebih murah
    (epoch lebih kecil / arsitektur lebih ringan).
 3. **Baca grid sebagai permukaan**: pivot `lr × epochs` di Tahap 2 (per `hidden_dim` kalau
-   MLP menang Tahap 1) — sudah otomatis lewat `reporting.grid_pivot_and_heatmap`.
+   MLP menang Tahap 1) — buat pivot dari `runs_rmb.csv` seperti pivot RM-a di 03a.
 4. **Waspadai pemenang di tepi grid** (mis. lr=1e-3 atau epochs=30) → sinyal optimum
    mungkin di luar rentang; pertimbangkan 1–2 run perluasan sebelum mengunci.
 5. **Perhatikan `overfit_signal`** (kolom otomatis: `best_epoch < epochs`) — head kecil
