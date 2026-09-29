@@ -25,7 +25,7 @@ Model dasar `indobenchmark/indobert-base-p2`, label biner (0 = normal,
 
 ## Setup
 
-Python 3.12 atau lebih baru.
+Python 3.13 (versi tempat seluruh pin di `requirements.txt` divalidasi).
 
 ```bash
 python -m venv .venv
@@ -72,37 +72,71 @@ diubah. Notebook saling terhubung hanya lewat berkas di `data/` dan `outputs/`.
 
 ## Struktur branch
 
-Repo ini punya tiga branch dengan peran berbeda, supaya angka efisiensi dari
-hardware yang berbeda tidak tercampur (lihat "Aturan validitas Bab 4" di
-bawah):
+Branch dipisah supaya angka efisiensi dari hardware yang berbeda tidak
+tercampur (lihat "Aturan validitas Bab 4" di bawah):
 
 | Branch | Isi |
 |---|---|
-| `main` | Codebase rujukan (kode saja). Tidak menyimpan hasil eksperimen apa pun — titik awal clone. |
+| `main` | Codebase rujukan lama (kode di `src/`). Tidak menyimpan hasil eksperimen apa pun. |
 | `local` | Kampanye yang dijalankan di mesin lokal (RTX 3050 Laptop, 4 GB VRAM); narasinya di `PROGRESS.md`. |
-| `vast.ai` | Kampanye yang dijalankan di instance Vast.ai (RTX 3090); narasinya di `PROGRESS.md`. |
-
-Untuk mulai kerja di instance Vast.ai:
-
-```bash
-git clone https://github.com/AryaSeptiaputra/indobert-with-rac.git
-cd indobert-with-rac
-git checkout vast.ai
-```
+| `vast.ai` | Kampanye lama di instance Vast.ai (RTX 3090), sebelum refactor ke notebook. |
+| `refactor/notebook-style` | Codebase notebook-only dan split terbaru (decode entitas HTML). Titik awal kampanye ulang di RTX 4090. |
 
 Checkpoint (`outputs/**/checkpoints/`) tidak ikut git dan tidak bisa dipulihkan
 tanpa mengulang tuning, jadi 03a sampai 05 dijalankan di mesin yang sama.
 
-Codebase (`notebooks/`) identik di ketiga branch — yang berbeda hanya narasi
-`PROGRESS.md`. Hasil run (`outputs/`) TIDAK disimpan di git: `runs_*.csv` menumpuk
+Hasil run (`outputs/`) TIDAK disimpan di git: `runs_*.csv` menumpuk
 dan `best.json` hanya mempromosikan F1 yang lebih tinggi, sehingga hasil lama yang
 ikut ter-clone tercampur dengan kampanye baru. Simpan hasil dari mesin tempat
 kampanye berjalan sebelum instance dihapus: jalankan sel "Arsipkan hasil" di
 `07_archive.ipynb`, lalu unduh `hasil_*.tar.gz` yang dihasilkannya.
-Jangan gabungkan angka
-efisiensi (waktu latih, latency, peak memory) dari `local` dan `vast.ai` dalam
-satu tabel; F1-macro boleh dibandingkan lintas branch karena tidak bergantung
-hardware.
+Jangan gabungkan angka efisiensi (waktu latih, latency, peak memory) dari mesin
+atau branch yang berbeda dalam satu tabel; F1-macro boleh dibandingkan lintas
+branch karena tidak bergantung hardware.
+
+---
+
+## Menjalankan di instance Vast.ai (RTX 4090)
+
+**Memilih instance:** 1× RTX 4090 24 GB, Max CUDA ≥ 13.0 (driver ≥ 580, karena
+torch memakai build `cu130`), RAM ≥ 32 GB, disk ≥ 50 GB, reliability > 99%. CPU
+ikut menentukan latency RM-c karena FAISS berjalan di CPU, jadi hindari mesin
+dengan jatah CPU tipis. Biarkan instance tetap menyala selama kampanye; instance
+yang di-stop bisa kehilangan GPU-nya ke penyewa lain.
+
+**Menyiapkan lingkungan** (satu per satu di terminal instance):
+
+```bash
+nvidia-smi
+git clone -b refactor/notebook-style https://github.com/AryaSeptiaputra/indobert-with-rac.git
+curl -LsSf https://astral.sh/uv/install.sh | sh
+cd indobert-with-rac && uv venv --python 3.13 .venv && source .venv/bin/activate
+uv pip install torch==2.12.1 --index-url https://download.pytorch.org/whl/cu130
+uv pip install -r requirements-dev.txt
+python -m ipykernel install --user --name indobert-rac --display-name "Python (indobert-rac)"
+python -c "import torch; print(torch.cuda.is_available(), torch.version.cuda, torch.cuda.get_device_name(0))"
+```
+
+Buka notebook lewat Jupyter bawaan template atau VS Code Remote-SSH dengan kernel
+**Python (indobert-rac)**. Jalankan Jupyter di dalam `tmux` agar kernel tidak ikut
+mati saat koneksi putus.
+
+**Pemeriksaan awal:**
+
+1. Jalankan `02_preprocessing.ipynb`; Tahap 9 harus melaporkan `identik`. Ini
+   membuktikan pustaka di instance menghasilkan split yang sama dengan yang di-commit.
+2. Sel gate hardware di 03a mencatat lingkungan ke `hardware.json`. Sejak itu jangan
+   memperbarui driver atau pustaka apa pun: 05 berhenti bila lingkungannya berbeda.
+3. Run kalibrasi (baris pertama grid RM-a) memberi waktu per epoch untuk
+   memperkirakan durasi kampanye.
+
+**Alur per tahap:** grid tahap lanjut (`*_STAGE*.csv`) disusun dari pemenang tahap
+sebelumnya. Setelah satu tahap selesai, perbarui CSV grid tahap berikutnya di
+repo, push, lalu `git pull` di instance sebelum menjalankan sel tahap itu. Commit
+semacam ini hanya menyentuh `tuning_grids/`, sehingga `outputs/` tidak terganggu.
+
+**Sebelum instance dihancurkan:** jalankan 05, 06, dan 07, lalu unduh
+`hasil_*.tar.gz` dan pastikan berkasnya utuh di mesin lokal.
 
 ---
 

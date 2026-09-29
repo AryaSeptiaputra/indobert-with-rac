@@ -260,12 +260,12 @@ dari tiga syarat:
 
 ## Struktur branch
 
-Repo ini punya tiga branch: `main` (codebase rujukan, tanpa data hasil run),
-`local` (kampanye di mesin lokal, RTX 3050 Laptop), dan `vast.ai` (kampanye di
-instance Vast.ai, RTX 3090). Saat bekerja di `local` atau
-`vast.ai`, Aturan #1 di atas berlaku per branch: jangan campur angka efisiensi
-dari kedua branch itu dalam satu tabel Bab 4. Codebase identik di ketiga
-branch; yang berbeda hanya narasi `PROGRESS.md`. Hasil run tidak disimpan di git.
+Branch: `main` (codebase rujukan lama berbasis `src/`, tanpa data hasil run),
+`local` (kampanye di mesin lokal, RTX 3050 Laptop), `vast.ai` (kampanye lama di
+instance Vast.ai, RTX 3090), dan `refactor/notebook-style` (codebase notebook-only
+dan split terbaru, titik awal kampanye ulang di RTX 4090; langkah instance ada di
+README). Aturan #1 di atas berlaku per branch dan per mesin: jangan campur angka
+efisiensi lintas branch dalam satu tabel Bab 4. Hasil run tidak disimpan di git.
 
 ## Status
 
