@@ -35,8 +35,8 @@ Grid 5-axis penuh (96 run, ~7 jam) **ditolak**: memakan hampir seluruh budget $2
 menaikkan risiko *overfitting ke validation set* (~1.400 sampel — makin banyak konfigurasi
 dibandingkan, makin besar peluang pemenang menang karena keberuntungan).
 
-**Ukuran train:** N = 6.588 (`data/processed/metadata.json`) →
-`ceil(6588/16) = 412` step/epoch · `ceil(6588/32) = 206` step/epoch.
+**Ukuran train:** N = 6.587 (`data/processed/metadata.json`) →
+`ceil(6587/16) = 412` step/epoch · `ceil(6587/32) = 206` step/epoch.
 
 ---
 

@@ -19,17 +19,19 @@ Dieksekusi oleh `notebooks/02_preprocessing.ipynb` (seluruh fungsinya hidup di n
 ```
 load raw (textOriginal, label)
  → drop missing
- → nfkc_key = normalize_nfkc(textOriginal)
+ → text_decoded = decode entitas HTML (textOriginal)   (&amp; → &, &quot; → ")
+ → nfkc_key = normalize_nfkc(text_decoded)
  → resolve konflik label (grup nfkc_key >1 label → assign 1)
- → dedup by nfkc_key (keep first)          → 9.412 baris  (reproduksi EDA)
+ → dedup by nfkc_key (keep first)          → 9.411 baris
  → stratified split 70/15/15 (seed 42)
- → clean_text(textOriginal) per subset     (transformasi setelah split)
+ → clean_text(text_decoded) per subset     (transformasi setelah split)
  → guard anti-leakage (buang text_clean duplikat lintas-split dari val/test)
  → simpan splits + processed + metadata
 ```
 
 ### Prinsip kunci
 
+- **Decode entitas HTML sebelum kunci dedup.** `textOriginal` hanya memuat entitas di 4 baris (`&amp;`, `&quot;`), tetapi `&amp;` menyembunyikan duplikat: `Pulau777, penuh warna &amp; keseruan 🌈` identik dengan versi bertanda `&`. Kolom `textOriginal` yang disimpan tetap teks mentah.
 - **Dedup sebelum split** pada data penuh (anti-leakage; kritis untuk RM-c/FAISS). Kunci = **NFKC-exact**, menangkap obfuskasi Unicode kelas 1 (fullwidth/double-struck/enclosed).
 - **NFKC** = fondasi normalisasi. Bukti EDA: baris kelas 1 ber-`[UNK]` turun 90,5% → 53,6% (Bagian 2).
 - **Konflik label** grup duplikat → **assign 1** (3 grup / 32 baris; mayoritas memang label 1).
@@ -57,24 +59,24 @@ load raw (textOriginal, label)
 |-------|-------|
 | Data awal | 14.237 |
 | − Missing `textOriginal`/`label` | −10 → 14.227 |
-| − Duplikat (NFKC-exact) | −4.815 → 9.412 |
-| − Guard leakage (text_clean lintas-split) | −17 → **9.395** |
+| − Duplikat (decode HTML + NFKC-exact) | −4.816 → 9.411 |
+| − Guard leakage (text_clean lintas-split) | −17 → **9.394** |
 
 ### Distribusi per split (stratified 70/15/15)
 
 | Split | n | L0 | L1 | L1 % |
 |-------|-----|-----|-----|------|
-| train | 6.588 | 5.391 | 1.197 | 18,17% |
+| train | 6.587 | 5.391 | 1.196 | 18,16% |
 | val | 1.402 | 1.145 | 257 | 18,33% |
 | test | 1.405 | 1.149 | 256 | 18,22% |
-| **total** | **9.395** | 7.685 | 1.710 | 18,20% |
+| **total** | **9.394** | 7.685 | 1.709 | 18,19% |
 
 Rasio imbalance ≈ **4,5 : 1** (kelas 0 dominan). Metrik utama: **F1-macro** (bukan accuracy).
 
 ### Class weights (dari train, sklearn `balanced`)
 
 ```json
-{ "0": 0.6110, "1": 2.7519 }
+{ "0": 0.6109, "1": 2.7538 }
 ```
 
 Dipakai pada loss berbobot (mis. `CrossEntropyLoss(weight=...)`) untuk menangani imbalance — bukan dengan membuang baris.

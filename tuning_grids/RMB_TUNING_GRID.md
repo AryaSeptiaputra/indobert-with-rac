@@ -43,7 +43,7 @@ Partisi tahap ikuti struktur ketergantungan nyata di kode, bukan asumsi:
   coordinate descent di sel pemenang, sama semangatnya dengan `warmup_ratio`/`weight_decay`
   di Tahap 2 RM-a.
 
-**Ukuran train:** N = 6.588 → `ceil(6588/32) = 206` step/epoch (batch dikunci 32 di
+**Ukuran train:** N = 6.587 → `ceil(6587/32) = 206` step/epoch (batch dikunci 32 di
 Tahap 1–2; Tahap 3 menguji batch 16/64 sebagai salah satu knop independen).
 
 ---

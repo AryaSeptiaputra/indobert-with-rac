@@ -4,9 +4,9 @@
   "counts": {
     "raw": 14237,
     "after_missing": 14227,
-    "after_dedup": 9412,
+    "after_dedup": 9411,
     "leakage_removed": 17,
-    "final_total": 9395
+    "final_total": 9394
   },
   "label_conflict": {
     "groups": 3,
@@ -15,10 +15,10 @@
   },
   "splits": {
     "train": {
-      "n": 6588,
+      "n": 6587,
       "L0": 5391,
-      "L1": 1197,
-      "L1_pct": 18.17
+      "L1": 1196,
+      "L1_pct": 18.16
     },
     "val": {
       "n": 1402,
@@ -34,10 +34,11 @@
     }
   },
   "class_weights": {
-    "0": 0.6110183639398998,
-    "1": 2.7518796992481205
+    "0": 0.6109256167686885,
+    "1": 2.75376254180602
   },
   "config": {
+    "html_entities": "decode (html.unescape) sebelum kunci NFKC dan clean_text",
     "dedup_key": "nfkc_exact",
     "split_ratios": [
       0.7,

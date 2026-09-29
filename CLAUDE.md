@@ -105,7 +105,7 @@ Checkpoint tidak ikut git dan tidak bisa dipulihkan tanpa mengulang tuning, jadi
 
 ```
 data/raw/data_labeling.csv
-    → 02: kunci NFKC, konflik label, dedup, split, clean_text, guard, gate checksum
+    → 02: decode entitas HTML, kunci NFKC, konflik label, dedup, split, clean_text, guard, gate checksum
     → data/interim/data_clean.csv, data/processed/{train,val,test}.csv + metadata.json
     → 03a: runs_rma.csv, rma_best.pt, rma_top/, hardware.json
     → 03b: features/, runs_rmb.csv, rmb_heads/, rmb_best.pt
@@ -120,7 +120,7 @@ data/raw/data_labeling.csv
 | Notebook | Isi |
 |---|---|
 | `01_eda` | EDA; mengunci kunci dedup, `max_length`, class weight, placeholder |
-| `02_preprocessing` | Tahap 1-10: load, NFKC, dedup, split, `clean_text`, guard anti-kebocoran, class weight, gate checksum, simpan, statistik [UNK] |
+| `02_preprocessing` | Tahap 1-11: load, decode entitas HTML, NFKC, dedup, split, `clean_text`, guard anti-kebocoran, class weight, gate checksum, simpan, statistik [UNK] |
 | `03a_rma_finetune` | Gate hardware, tokenisasi, `train_rma` (akumulasi gradien, AMP), pencatatan run, kalibrasi, grid tahap 1-2 |
 | `03b_rmb_frozen` | Ekstraksi fitur beku (cache), `train_rmb`, pencatatan run, grid RM-b satu sel per tahap (1, 1B, 2, 3) |
 | `03c_rmc_rac` | RAC, grid seluruh head x alpha x k, ringkasan per head, putusan juara, cek uniform, kandidat |
@@ -159,7 +159,7 @@ kodenya sudah dihapus saat refactor ke notebook (2026-09-30).
    atau label test untuk evaluasi.
 3. **Indeks FAISS hanya dari split train.** Memasukkan val atau test membuat
    retrieval menemukan sampel uji di dalam indeksnya sendiri.
-4. **Jangan menimpa `data/processed/` tanpa gate checksum.** Tahap 8 notebook 02
+4. **Jangan menimpa `data/processed/` tanpa gate checksum.** Tahap 9 notebook 02
    membandingkan checksum ISI split baru dengan yang lama (`check_split`) dan
    menolak melanjutkan bila berbeda. Yang dibandingkan isi kanonik, bukan SHA-256
    byte berkas: hash byte berbeda antar OS (CRLF vs LF) dan antar git `autocrlf`.
@@ -244,9 +244,9 @@ ditambah retrieval saat inferensi.
 `data/raw/data_labeling.csv` — komentar YouTube berlabel. Kolom yang dipakai
 `textOriginal` dan `label`; sisanya metadata dan sebagiannya memuat identitas.
 
-`data/processed/` berisi split 70:15:15 (train 6.588 / val 1.402 / test 1.405,
-total 9.395, sekitar 18% kelas judi, rasio 4,5:1). Class weight ada di
-`metadata.json` (`{0: 0.611, 1: 2.752}`) dan dipakai pada `CrossEntropyLoss`.
+`data/processed/` berisi split 70:15:15 (train 6.587 / val 1.402 / test 1.405,
+total 9.394, sekitar 18% kelas judi, rasio 4,5:1). Class weight ada di
+`metadata.json` (`{0: 0.611, 1: 2.754}`) dan dipakai pada `CrossEntropyLoss`.
 Karena timpang, laporkan F1-macro dan F1 kelas judi, jangan accuracy saja.
 
 ## Kriteria sukses
