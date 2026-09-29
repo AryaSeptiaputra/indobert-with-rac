@@ -122,7 +122,7 @@ data/raw/data_labeling.csv
 | `01_eda` | EDA; mengunci kunci dedup, `max_length`, class weight, placeholder |
 | `02_preprocessing` | Tahap 1-10: load, NFKC, dedup, split, `clean_text`, guard anti-kebocoran, class weight, gate checksum, simpan, statistik [UNK] |
 | `03a_rma_finetune` | Gate hardware, tokenisasi, `train_rma` (akumulasi gradien, AMP), pencatatan run, kalibrasi, grid tahap 1-2 |
-| `03b_rmb_frozen` | Ekstraksi fitur beku (cache), `train_rmb`, pencatatan run, seluruh grid RM-b |
+| `03b_rmb_frozen` | Ekstraksi fitur beku (cache), `train_rmb`, pencatatan run, grid RM-b satu sel per tahap (1, 1B, 2, 3) |
 | `03c_rmc_rac` | RAC, grid seluruh head x alpha x k, ringkasan per head, putusan juara, cek uniform, kandidat |
 | `05_final_benchmark` | Gate lingkungan, evaluasi test, kandidat #2, benchmark latency per komponen, perbandingan, kriteria sukses |
 | `06_artifacts` | Gambar 4.1-4.8 (PNG 300 dpi + PDF, koma desimal, pembulatan setengah ke atas) dan data Tabel 4.1-4.19, L.1 |
