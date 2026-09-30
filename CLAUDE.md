@@ -198,9 +198,9 @@ figur EDA dan README): hasil run tidak disimpan di git. Amankan hasil dengan sel
 - `outputs/preprocessing/preprocessing_stats.json` dari 02 (di luar `metadata.json`
   supaya tidak menyentuh area gate checksum).
 
-`outputs/_archive_*/` berisi hasil kampanye Vast.ai lama. Disimpan sebagai jalan
-mundur sampai kampanye lokal terbukti berhasil, lalu dihapus. Jangan dipakai
-sebagai sumber angka Bab 4.
+Hasil resmi Bab 4 adalah kampanye RTX 4090 (2026-09-30) di `outputs/tuning/` lokal;
+notebook hasil eksekusinya di `outputs/notebooks_eksekusi/`. Ringkasan angka dan
+catatan prosesnya di `PROGRESS.md`.
 
 ## Rancangan eksplorasi hyperparameter
 

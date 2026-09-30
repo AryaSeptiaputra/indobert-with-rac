@@ -11,18 +11,106 @@ strategi adaptasi IndoBERT untuk deteksi komentar judi). Terakhir diperbarui:
 | EDA | Selesai (ditambah pencarian entitas HTML, 2026-09-30) | `notebooks/01_eda.ipynb`, `docs/EDA_REPORT_BAGIAN1/2/3.md` |
 | Preprocessing | Selesai, split dibangun ulang 2026-09-30 | `data/processed/`, `DATASET.md` |
 | Refactor ke gaya notebook-only | Selesai (2026-09-30) | `notebooks/`; `src/` dan `tests/` dihapus |
-| Kampanye tuning RM-a / RM-b / RM-c | Belum, menunggu run di RTX 4090 | `outputs/tuning/` (kosong) |
-| Benchmark final (test, satu sesi) | Belum | `outputs/tuning/metrics/` |
-| Artefak Bab 4 (gambar, data tabel) | Belum | `artifacts/` dari `06_artifacts.ipynb` |
-| Penulisan Bab 4 | Belum | menunggu angka kampanye baru |
+| Kampanye tuning RM-a / RM-b / RM-c | Selesai (RTX 4090, 2026-09-30) | `outputs/tuning/runs_*.csv`, `best.json`, `candidates.json` |
+| Benchmark final (test, satu sesi) | Selesai (2026-09-30) | `outputs/tuning/metrics/` |
+| Artefak Bab 4 (gambar, data tabel) | Selesai (2026-09-30) | `outputs/tuning/artifacts/` |
+| Penulisan Bab 4 | Belum | angka resmi di bagian "Hasil kampanye RTX 4090" |
 
 ## Keadaan sekarang
 
-Kode dan data siap untuk kampanye ulang di satu instance Vast.ai **RTX 4090 24 GB**
-(03a sampai 05 di mesin yang sama). Seluruh angka kampanye sebelumnya, baik RTX 3090
-(Vast.ai) maupun RTX 3050 (lokal), **tidak berlaku untuk Bab 4**: split berubah
-(decode entitas HTML), sehingga riwayat run lama menjadi yatim. Langkah penyiapan
-instance ada di README, bagian "Menjalankan di instance Vast.ai (RTX 4090)".
+Kampanye ulang di satu instance Vast.ai **RTX 4090 24 GB** selesai pada 2026-09-30:
+tuning (03a-03c), benchmark final (05), artefak (06), dan arsip (07) berjalan dalam
+satu sesi mesin. Seluruh `outputs/` (termasuk checkpoint dan fitur beku, 1,8 GB) dan
+notebook hasil eksekusi (`outputs/notebooks_eksekusi/`) tersimpan di mesin lokal,
+di luar git; cadangannya di `C:\Users\Arya\Downloads\HASIL-300926\`. Checkpoint
+juara ada di `models/`. Angka kampanye RTX 3090 dan RTX 3050 sebelumnya tidak berlaku
+untuk Bab 4, dan arsip RTX 3090 lokal sudah dihapus.
+
+## Hasil kampanye RTX 4090 (2026-09-30)
+
+**Lingkungan** (`hardware.json`): NVIDIA GeForce RTX 4090 24 GB, driver 580.178.04,
+CUDA 13.0, AMD Ryzen Threadripper PRO 3975WX (64 thread), RAM 251,5 GB, Ubuntu (Linux
+6.8), Python 3.13.15, torch 2.12.1+cu130, transformers 5.12.1, faiss 1.14.3, seed 42.
+Sesi tuning dan benchmark final berada pada boot yang sama (`same_boot_as_tuning: true`).
+
+**Jalur tuning (seleksi pada validation):**
+
+- **RM-a** (26 run): grid tahap 1 `lr x epochs x batch` (24 run) memberi permukaan
+  datar (rentang 0,9 pp, rata-rata per lr 97,30 ± 0,01). #9 (3e-5 / 8 / 16) 0,97856
+  seri dengan #1 (2e-5 / 5 / 16) 0,97713; pusat tahap 2 = juara F1 mentah (#9).
+  Tahap 2: warmup 0,0 (-0,39 pp) dan wd 0,1 (-0,27 pp) kalah, default dipertahankan.
+  **Juara #9**, epoch terbaik 6 dari 8, 136,1 s, puncak memori latih 3.599 MB.
+- **RM-b** (31 run): tahap 1 mlp/512 menang di tepi (0,9470) -> tahap 1B 768/1024
+  seri tiga arah, dikunci mlp/512 (termurah). Tahap 2 `lr x epochs`: lr 2e-4 / 30
+  epoch menang di tepi epoch -> tahap 2B 50/100 epoch (jenuh, puncak epoch 66). Tahap
+  3 di #23: hanya dropout 0,3 berpengaruh (+0,44 pp) -> tahap 3B 0,4/0,5 memastikan
+  0,3 adalah puncak. **Juara #25** (mlp/512, lr 2e-4, 100 epoch, dropout 0,3, wd 0,01,
+  batch 32) 0,968456, 394.754 parameter, 21,6 s (ekstraksi 3,9 s + head 17,8 s),
+  puncak memori latih 529,5 MB.
+- **RM-c** (2.047 run): 31 head x 66 `alpha x k` + cek uniform. Gain RAC berbanding
+  terbalik dengan kekuatan head (+4,25 pp pada head linear, di bawah ambang seri pada
+  head >= 0,96); kurva alpha rata-rata memuncak di 0,4 dan negatif di atas sekitar
+  0,75. Default (head #25, alpha 0,1, k=1) 0,969622 (+0,12 pp atas head sendiri);
+  penantang head #30 alpha 0,3 k=1 +0,26 pp tetapi CI95 bootstrap [-0,59; +1,10] pp
+  melewati nol -> **juara default #1591**, biaya = head RM-b resmi.
+
+**Kandidat** (`candidates.json`, sha256 `72430138…a04`, ditetapkan 09:02:11 sebelum
+test dibuka): RM-a #9 / #1, RM-b #25 / #30, RM-c #1591 / #1597 (alpha 0,2).
+
+**Benchmark final (test, 1.405 sampel):**
+
+| | RM-a | RM-b | RM-c |
+|---|---|---|---|
+| F1-macro | 0,963478 | 0,949227 | 0,949227 |
+| F1 judi (precision / recall) | 0,9405 (0,925 / 0,957) | 0,9167 (0,931 / 0,902) | sama dengan RM-b |
+| Selisih F1 vs RM-a | — | 1,43 pp | 1,43 pp |
+| Trainable params | 109.485.314 | 394.754 (-99,64%) | 394.754 (-99,64%) |
+| Waktu latih | 136,06 s | 21,64 s (-84,1%) | 21,64 s (-84,1%) |
+| Latency per sampel | 6,67 ms | 6,67 ms | 8,73 ms |
+| Memori GPU inferensi (bobot / puncak) | 429,5 / 436,1 MB | 431,5 / 438,1 MB | 431,5 / 438,1 MB |
+| Kriteria sukses | — | 3/3 | 3/3 |
+
+Kandidat #2 pada test: RM-a #1 0,968762, RM-b #30 0,944391, RM-c #1597 0,952780.
+
+**Temuan untuk Bab 4:**
+
+1. **RM-c identik dengan RM-b di test**: 0 dari 1.405 prediksi berbeda. Dengan alpha
+   0,1 dan k=1, retrieval hanya bisa membalik prediksi dengan p_bert 0,50-0,56. Konsisten
+   dengan validation (gain +0,12 pp, di bawah ambang derau). RAC berperan sebagai
+   pengoreksi head lemah, bukan penambah head terkuat.
+2. **Urutan kandidat seri tidak stabil di test**: kandidat #2 RM-a dan RM-c lebih baik
+   di test (+0,53 dan +0,36 pp). Juara tidak ditukar (test tidak dipakai untuk seleksi);
+   selisih di dalam ambang seri tak terbedakan dengan satu seed.
+3. **Penurunan val -> test lebih besar pada RM-b/RM-c** (1,93 / 2,04 pp vs 1,51 pp
+   RM-a): epoch terbaik RM-b dipilih dari 100 epoch yang berderau (train loss mendekati
+   nol, val F1 berfluktuasi sekitar ±0,3 pp per epoch), sehingga val F1-nya optimistis.
+4. **RM-b lebih sering melewatkan komentar judi**: recall judi 0,902 vs 0,957, precision
+   setara.
+5. **Saat inferensi ketiga strategi setara** dalam latency dan memori (encoder
+   mengambil 98,8% latency RM-a dan 97,8% RM-b). RM-c menambah retrieval FAISS 1,05 ms dan fusi 0,11 ms;
+   encoder RM-c konsisten sekitar 0,8 ms lebih lambat daripada encoder RM-b yang
+   identik, dugaan kontensi thread OpenMP FAISS (belum dibuktikan). Efisiensi RM-b/RM-c
+   sepenuhnya di sisi training: parameter -99,64%, waktu -84,1%, memori latih -85,3%.
+6. **Biaya indeks FAISS**: bangun 3,6 ms, 19,3 MB, 6.587 vektor dari train. Waktu
+   penelusuran batch per query (07) tidak menunjukkan tren terhadap k (53-124 us,
+   berderau karena CPU instance dipakai bersama); angka retrieval resmi dari 05.
+
+**Catatan proses (untuk transparansi Bab 3/4):**
+
+- 03b sempat dijalankan dengan Run All sebelum CSV tahap lanjut diperbarui (run
+  #7-#27 dari grid kampanye lama). Hasil RM-b dipindah ke luar repo dan RM-b diulang
+  dari nol; tahap 1 dan 1B identik sampai 6 desimal (RM-b deterministik).
+- Kandidat #2 RM-c awal (#2047, uniform pada k=1) identik secara prediksi dengan #1.
+  Aturan pengecualian ditambahkan (sejajar varian epoch RM-b) dan kandidat ditetapkan
+  ulang sebelum test dibuka; versi lama disimpan di
+  `candidates_superseded_k1_weighting.json`.
+- 05 dijalankan tiga kali dalam sesi yang sama; F1 test identik di ketiganya. Run
+  kedua dan ketiga memperbaiki pengukuran memori inferensi (sebelumnya seluruh model
+  berada di GPU sekaligus) dan membekukan RM-a saat inferensi (parameter
+  `requires_grad` membuat autocast menyimpan salinan fp16 bobot, +186 MB). Angka
+  latency dan memori resmi dari run ketiga (09:14:05).
+- 06 dijalankan ulang setelah `fonts-liberation` dipasang supaya gambar memakai
+  Liberation Serif (metrik identik dengan Times New Roman).
 
 ## Perubahan 2026-09-30
 
@@ -53,7 +141,16 @@ grid RM-c (66 `alpha x k` per head) dijalankan apa adanya. CSV tahap lanjut
 (`RMA_TUNING_GRID_STAGE2`, `RMB_TUNING_GRID_STAGE1B/2/3`) masih berisi keputusan
 kampanye lama dan disusun ulang dari pemenang baru, dengan sumbu dan nilai yang sama.
 Panduan penyusunannya ada di markdown sebelum setiap sel tahap lanjutan di 03a, 03b,
-dan 03c. Sel tahap 2 di 03a kini membaca ulang CSV saat dijalankan.
+dan 03c. Sel tahap 2 di 03a kini membaca ulang CSV saat dijalankan. Selama kampanye
+ditambahkan dua tahap perluasan karena pemenang di tepi grid:
+`RMB_TUNING_GRID_STAGE2B.csv` (epoch 50/100) dan `RMB_TUNING_GRID_STAGE3B.csv`
+(dropout 0,4/0,5); sel keduanya disisipkan manual di 03b instance.
+
+**Perbaikan kode selama kampanye** (seluruhnya sebelum atau tanpa memengaruhi seleksi):
+03c mengeluarkan varian `weighting` pada k=1 dari kandidat #2 RM-c; 05 mengukur memori
+inferensi per skenario secara terisolasi dan membekukan RM-a saat inferensi; 06
+merapikan label Gambar 4.2 dan titik berimpit Gambar 4.8; 07 menambah pemanasan dan
+20 pengulangan pada pengukuran penelusuran FAISS.
 
 ## Dataset
 
@@ -73,27 +170,20 @@ judi, rasio 4,5:1. Class weight dari train `{0: 0.6109, 1: 2.7538}`. Konflik lab
 3 grup, 32 baris, kebijakan `assign_1`.
 
 Checksum isi kanonik (12 karakter pertama): train `da68f14363eb`, val `854a544e1ad9`,
-test `8352c8d18d91`. Gate Tahap 9 notebook 02 di instance harus melaporkan `identik`.
+test `8352c8d18d91`. Gate Tahap 9 notebook 02 di instance RTX 4090 melaporkan
+`identik` untuk ketiga split.
 
 Model dasar `indobenchmark/indobert-base-p2`, `max_length` 128, special token
 `[URL]`, `[MENTION]`, `[NUM]`.
 
-## Rencana kampanye RTX 4090
+## Durasi kampanye RTX 4090
 
-1. Siapkan instance sesuai README (Python 3.13, torch 2.12.1 `cu130`, kernel
-   `indobert-rac`).
-2. Jalankan 02: gate harus `identik`.
-3. 03a: gate hardware mencatat `hardware.json`, run kalibrasi, grid tahap 1. Kirim
-   `runs_rma.csv` untuk menyusun CSV tahap 2 (dan tahap perluasan bila pemenang di tepi).
-4. 03b: tahap 1, lalu 1B (kondisional), 2, 3; CSV tiap tahap disusun dari pemenang
-   tahap sebelumnya.
-5. 03c: grid seluruh head, putusan juara, cek `weighting=uniform`, `candidates.json`.
-6. 05, 06, 07; unduh `hasil_*.tar.gz` sebelum instance dihancurkan.
-
-**Perkiraan waktu.** Baseline RM-a (`lr=2e-5, epochs=5, batch=16`) makan 143,2 s di
-RTX 3090 (kampanye lama). Dengan 4090 sedikit lebih cepat, grid tahap 1 RM-a
-(128 epoch) diperkirakan di bawah satu jam, RM-b dan RM-c masing-masing hitungan
-menit. Angka pastinya dari run kalibrasi di 03a.
+Kalibrasi RM-a (baseline `lr=2e-5, epochs=5, batch=16`) 90 s dengan puncak memori
+3,6 GB; grid tahap 1 RM-a (24 run) sekitar 28 menit. Setiap head RM-b 5-38 s. Grid
+RM-c 2.046 run selesai dalam 1,7 menit. Seluruh kampanye, dari gate hardware 03a
+(07:41) sampai arsip 07 (09:33), berjalan dalam satu boot instance. Instance
+pertama ditolak karena driver hanya mendukung CUDA 12.7; instance kedua dipilih
+dengan Max CUDA >= 13.0.
 
 ## Pelajaran yang tetap berlaku
 
@@ -124,9 +214,8 @@ hasilnya deterministik, dan tidak ada hyperparameter ANN yang mengganggu perband
 ## Riwayat kampanye lama (tidak dipakai untuk Bab 4)
 
 - **RTX 3090, Vast.ai** (hingga 2026-09-14): angka tersimpan di tag
-  `hasil-vast-2026-09-14`. Notebook ber-output, figur EDA, dan checkpoint final
-  diarsip lokal di `outputs/_archive_vastai_2026-09-30/` (tidak ikut git) sampai
-  kampanye RTX 4090 terbukti berhasil, lalu dihapus.
+  `hasil-vast-2026-09-14`. Arsip lokalnya (`outputs/_archive_vastai_2026-09-30/`)
+  dihapus setelah kampanye RTX 4090 terverifikasi (2026-09-30).
 - **RTX 3050 Laptop, lokal** (2026-09-02 sampai 2026-09-05): RM-a 30 run, RM-b 27 run,
   RM-c 67 run, kriteria sukses RM-b dan RM-c 3/3. Dijalankan di split lama (9.395
   baris) dan struktur kode lama.
@@ -135,10 +224,11 @@ hasilnya deterministik, dan tidak ada hyperparameter ANN yang mengganggu perband
 
 ## Langkah berikutnya
 
-1. Jalankan kampanye di RTX 4090 sesuai rencana di atas.
-2. Setelah kampanye berhasil, hapus `outputs/_archive_vastai_2026-09-30/` dan
-   `models/*.pt` lama.
-3. Tulis Bab 4 dari `outputs/tuning/metrics/` dan `artifacts/`.
+1. Tulis Bab 4 dari `outputs/tuning/metrics/` dan `outputs/tuning/artifacts/`
+   (Gambar 4.1-4.8, `data_tabel.xlsx`); temuan dan catatan proses di atas menjadi
+   bahan pembahasan.
+2. 06 bisa dijalankan ulang di mesin lokal tanpa GPU bila gambar perlu diubah; pasang
+   font Liberation Serif lebih dulu supaya tampilannya sama dengan versi instance.
 
 ## Aturan validitas Bab 4
 
