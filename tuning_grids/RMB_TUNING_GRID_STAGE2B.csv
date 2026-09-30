@@ -1,0 +1,3 @@
+head_arch,hidden_dim,epochs,lr,dropout,weight_decay,batch,catatan
+mlp,512,50,0.0002,0.1,0.01,32,"Perluasan Tahap 2 RM-b -- pemenang Tahap 2 run #13 (lr=2e-4, epochs=30, val F1-macro 0,9627) duduk di tepi epochs dan memuncak di epoch terakhir (20->30: +0,33 pp). Uji apakah kenaikan berlanjut; lr konstan sehingga 30 epoch pertama identik dengan run #13."
+mlp,512,100,0.0002,0.1,0.01,32,"Perluasan Tahap 2 RM-b -- anggaran jauh di atas tepi untuk memastikan titik jenuh lr=2e-4 sebelum mengunci sel pemenang untuk Tahap 3."
